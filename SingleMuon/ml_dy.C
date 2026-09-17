@@ -663,134 +663,147 @@ void evaluateDrellYanBdt(
     logValue("S/sqrt(S+B)", significance);
 
     // HISTOGRAMS //
-    // logLine("");
-    // logLine("--- CREATE HISTOGRAMS ---");
+    logLine("");
+    logLine("--- CREATE HISTOGRAMS ---");
 
-    // std::cout << "Histogram creation START\n";
+    std::cout << "Histogram creation START\n";
 
-    // const ULong64_t histogramKeepThreshold =
-    //     static_cast<ULong64_t>(std::llround(histogramUsagePercentage * 100.0));
+    const ULong64_t histogramKeepThreshold =
+        static_cast<ULong64_t>(std::llround(histogramUsagePercentage * 100.0));
 
-    // std::cout << "Histogram keep threshold: " << histogramKeepThreshold << "/10000\n";
-    // std::cout << "Applying histogram dataset percentage filter\n";
+    std::cout << "Histogram keep threshold: " << histogramKeepThreshold << "/10000\n";
+    std::cout << "Applying histogram dataset percentage filter\n";
 
-    // auto histogramDf = evaluationDf.Filter(
-    //     [histogramKeepThreshold, randomSeed](ULong64_t index) {
-    //         return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
-    //     }, {"Index"});
+    auto histogramDf = evaluationDf.Filter(
+        [histogramKeepThreshold, randomSeed](ULong64_t index) {
+            return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
+        }, {"Index"});
 
-    // std::cout << "Creating dataframe containing model-selected events\n";
+    std::cout << "Creating dataframe containing model-selected events\n";
 
-    // auto predictedDf = histogramDf
-    //     .Filter([selectedIndices](ULong64_t index) {
-    //         return selectedIndices->find(index) != selectedIndices->end();
-    //     }, {"Index"})
-    //     .Filter([](const ROOT::VecOps::RVec<float>& pt,
-    //                const ROOT::VecOps::RVec<float>& eta,
-    //                const ROOT::VecOps::RVec<float>& phi) {
-    //         return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
-    //     }, {"Muon_pt", "Muon_eta", "Muon_phi"})
-    //     .Define("EvaluationMuonKinematics",
-    //         [](const ROOT::VecOps::RVec<float>& pt,
-    //            const ROOT::VecOps::RVec<float>& eta,
-    //            const ROOT::VecOps::RVec<float>& phi) {
-    //             int lead = -1, sub = -1;
+    auto predictedDf = histogramDf
+        .Filter([selectedIndices](ULong64_t index) {
+            return selectedIndices->find(index) != selectedIndices->end();
+        }, {"Index"})
+        .Filter([](const ROOT::VecOps::RVec<float>& pt,
+                   const ROOT::VecOps::RVec<float>& eta,
+                   const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("EvaluationMuonKinematics",
+            [](const ROOT::VecOps::RVec<float>& pt,
+               const ROOT::VecOps::RVec<float>& eta,
+               const ROOT::VecOps::RVec<float>& phi) {
+                int lead = -1, sub = -1;
 
-    //             for (size_t i = 0; i < pt.size(); ++i) {
-    //                 if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
-    //                 else if (sub < 0 || pt[i] > pt[sub]) sub = i;
-    //             }
+                for (size_t i = 0; i < pt.size(); ++i) {
+                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
+                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
+                }
 
-    //             return ROOT::VecOps::RVec<float>{
-    //                 pt[lead], eta[lead], phi[lead],
-    //                 pt[sub], eta[sub], phi[sub]
-    //             };
-    //         }, {"Muon_pt", "Muon_eta", "Muon_phi"})
-    //     .Define("LeadingMuon_pt",  "EvaluationMuonKinematics[0]")
-    //     .Define("LeadingMuon_eta", "EvaluationMuonKinematics[1]")
-    //     .Define("LeadingMuon_phi", "EvaluationMuonKinematics[2]")
-    //     .Define("SubleadingMuon_pt",  "EvaluationMuonKinematics[3]")
-    //     .Define("SubleadingMuon_eta", "EvaluationMuonKinematics[4]")
-    //     .Define("SubleadingMuon_phi", "EvaluationMuonKinematics[5]")
-    //     .Define("EvaluationDimuonKinematics",
-    //         [](float pt1, float eta1, float phi1,
-    //            float pt2, float eta2, float phi2) {
-    //             ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
-    //             ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
-    //             const auto d = a + b;
+                return ROOT::VecOps::RVec<float>{
+                    pt[lead], eta[lead], phi[lead],
+                    pt[sub], eta[sub], phi[sub]
+                };
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("LeadingMuon_pt",  "EvaluationMuonKinematics[0]")
+        .Define("LeadingMuon_eta", "EvaluationMuonKinematics[1]")
+        .Define("LeadingMuon_phi", "EvaluationMuonKinematics[2]")
+        .Define("SubleadingMuon_pt",  "EvaluationMuonKinematics[3]")
+        .Define("SubleadingMuon_eta", "EvaluationMuonKinematics[4]")
+        .Define("SubleadingMuon_phi", "EvaluationMuonKinematics[5]")
+        .Define("EvaluationDimuonKinematics",
+            [](float pt1, float eta1, float phi1,
+               float pt2, float eta2, float phi2) {
+                ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
+                ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
+                const auto d = a + b;
 
-    //             return ROOT::VecOps::RVec<float>{
-    //                 (float)d.M(), (float)d.Pt(), (float)d.Rapidity(), (float)d.Phi()
-    //             };
-    //         }, {"LeadingMuon_pt", "LeadingMuon_eta", "LeadingMuon_phi",
-    //             "SubleadingMuon_pt", "SubleadingMuon_eta", "SubleadingMuon_phi"})
-    //     .Define("Dimuon_mass",     "EvaluationDimuonKinematics[0]")
-    //     .Define("Dimuon_pt",       "EvaluationDimuonKinematics[1]")
-    //     .Define("Dimuon_rapidity", "EvaluationDimuonKinematics[2]")
-    //     .Define("Dimuon_phi",      "EvaluationDimuonKinematics[3]");
+                return ROOT::VecOps::RVec<float>{
+                    (float)d.M(), (float)d.Pt(), (float)d.Rapidity(), (float)d.Phi()
+                };
+            }, {"LeadingMuon_pt", "LeadingMuon_eta", "LeadingMuon_phi",
+                "SubleadingMuon_pt", "SubleadingMuon_eta", "SubleadingMuon_phi"})
+        .Define("Dimuon_mass",     "EvaluationDimuonKinematics[0]")
+        .Define("Dimuon_pt",       "EvaluationDimuonKinematics[1]")
+        .Define("Dimuon_rapidity", "EvaluationDimuonKinematics[2]")
+        .Define("Dimuon_phi",      "EvaluationDimuonKinematics[3]");
 
-    // std::cout << "Predicted DY histogram dataframe prepared\n";
-    // std::cout << "Creating histogram actions\n";
+    std::cout << "Predicted DY histogram dataframe prepared\n";
+    std::cout << "Creating histogram actions\n";
 
-    // auto histogramEventCount = predictedDf.Count();
+    auto histogramEventCount = predictedDf.Count();
 
-    // auto hLeadingPt  = predictedDf.Histo1D({"bdt_LeadingMuon_pt",  "BDT predicted DY;Leading muon p_{T} [GeV];Events", 100, 0, 140}, "LeadingMuon_pt");
-    // auto hLeadingEta = predictedDf.Histo1D({"bdt_LeadingMuon_eta", "BDT predicted DY;Leading muon #eta;Events", 100, -2.4, 2.4}, "LeadingMuon_eta");
-    // auto hLeadingPhi = predictedDf.Histo1D({"bdt_LeadingMuon_phi", "BDT predicted DY;Leading muon #phi [rad];Events", 100, -3.2, 3.2}, "LeadingMuon_phi");
+    auto hLeadingPt  = predictedDf.Histo1D({"bdt_LeadingMuon_pt",  "BDT predicted DY;Leading muon p_{T} [GeV];Events", 100, 0, 140}, "LeadingMuon_pt");
+    auto hLeadingEta = predictedDf.Histo1D({"bdt_LeadingMuon_eta", "BDT predicted DY;Leading muon #eta;Events", 100, -2.4, 2.4}, "LeadingMuon_eta");
+    auto hLeadingPhi = predictedDf.Histo1D({"bdt_LeadingMuon_phi", "BDT predicted DY;Leading muon #phi [rad];Events", 100, -3.2, 3.2}, "LeadingMuon_phi");
 
-    // auto hSubPt  = predictedDf.Histo1D({"bdt_SubleadingMuon_pt",  "BDT predicted DY;Subleading muon p_{T} [GeV];Events", 100, 0, 140}, "SubleadingMuon_pt");
-    // auto hSubEta = predictedDf.Histo1D({"bdt_SubleadingMuon_eta", "BDT predicted DY;Subleading muon #eta;Events", 100, -2.4, 2.4}, "SubleadingMuon_eta");
-    // auto hSubPhi = predictedDf.Histo1D({"bdt_SubleadingMuon_phi", "BDT predicted DY;Subleading muon #phi [rad];Events", 100, -3.2, 3.2}, "SubleadingMuon_phi");
+    auto hSubPt  = predictedDf.Histo1D({"bdt_SubleadingMuon_pt",  "BDT predicted DY;Subleading muon p_{T} [GeV];Events", 100, 0, 140}, "SubleadingMuon_pt");
+    auto hSubEta = predictedDf.Histo1D({"bdt_SubleadingMuon_eta", "BDT predicted DY;Subleading muon #eta;Events", 100, -2.4, 2.4}, "SubleadingMuon_eta");
+    auto hSubPhi = predictedDf.Histo1D({"bdt_SubleadingMuon_phi", "BDT predicted DY;Subleading muon #phi [rad];Events", 100, -3.2, 3.2}, "SubleadingMuon_phi");
 
-    // auto hMass = predictedDf.Histo1D({"bdt_Dimuon_mass", "BDT predicted DY;Dimuon mass [GeV];Events", 100, 50, 150}, "Dimuon_mass");
-    // auto hPt   = predictedDf.Histo1D({"bdt_Dimuon_pt", "BDT predicted DY;Dimuon p_{T} [GeV];Events", 100, 0, 200}, "Dimuon_pt");
-    // auto hRap  = predictedDf.Histo1D({"bdt_Dimuon_rapidity", "BDT predicted DY;Dimuon rapidity;Events", 100, -3, 3}, "Dimuon_rapidity");
-    // auto hPhi  = predictedDf.Histo1D({"bdt_Dimuon_phi", "BDT predicted DY;Dimuon #phi [rad];Events", 100, -3.2, 3.2}, "Dimuon_phi");
+    auto hMass = predictedDf.Histo1D({"bdt_Dimuon_mass", "BDT predicted DY;Dimuon mass [GeV];Events", 100, 50, 150}, "Dimuon_mass");
+    auto hPt   = predictedDf.Histo1D({"bdt_Dimuon_pt", "BDT predicted DY;Dimuon p_{T} [GeV];Events", 100, 0, 200}, "Dimuon_pt");
+    auto hRap  = predictedDf.Histo1D({"bdt_Dimuon_rapidity", "BDT predicted DY;Dimuon rapidity;Events", 100, -3, 3}, "Dimuon_rapidity");
+    auto hPhi  = predictedDf.Histo1D({"bdt_Dimuon_phi", "BDT predicted DY;Dimuon #phi [rad];Events", 100, -3.2, 3.2}, "Dimuon_phi");
 
-    // std::vector<ROOT::RDF::RResultHandle> histogramHandles = {
-    //     histogramEventCount,
-    //     hLeadingPt, hLeadingEta, hLeadingPhi,
-    //     hSubPt, hSubEta, hSubPhi,
-    //     hMass, hPt, hRap, hPhi
-    // };
+    std::vector<ROOT::RDF::RResultHandle> histogramHandles = {
+        histogramEventCount,
+        hLeadingPt, hLeadingEta, hLeadingPhi,
+        hSubPt, hSubEta, hSubPhi,
+        hMass, hPt, hRap, hPhi
+    };
 
-    // std::cout << "Prepared " << histogramHandles.size() << " histogram actions\n";
-    // std::cout << "Executing histogram RDataFrame graphs\n";
+    std::cout << "Prepared " << histogramHandles.size() << " histogram actions\n";
+    std::cout << "Executing histogram RDataFrame graphs\n";
 
-    // ROOT::RDF::RunGraphs(histogramHandles);
+    ROOT::RDF::RunGraphs(histogramHandles);
 
-    // std::cout << "Histogram RDataFrame graphs completed\n";
-    // std::cout << "Events used for histograms: " << *histogramEventCount << "\n";
+    std::cout << "Histogram RDataFrame graphs completed\n";
+    std::cout << "Events used for histograms: " << *histogramEventCount << "\n";
 
-    // logValue("Events used for histograms", *histogramEventCount);
+    logValue("Events used for histograms", *histogramEventCount);
 
-    // std::cout << "Creating Images directory\n";
-    // gSystem->mkdir("Images", true);
+    std::cout << "Creating Images directory\n";
+    gSystem->mkdir("Images", true);
 
-    // auto save = [](auto& hist, const std::string& file) {
-    //     std::cout << "Saving histogram: " << file << "\n";
-    //     TCanvas canvas(("canvas_" + std::string(hist->GetName())).c_str(), "", 1000, 800);
-    //     canvas.SetLeftMargin(0.14); canvas.SetBottomMargin(0.13); canvas.SetTicks(1, 1);
-    //     hist->SetStats(false); hist->SetLineWidth(2); hist->Draw("HIST");
-    //     canvas.SaveAs(file.c_str());
-    //     logValue("Evaluation histogram saved", file);
-    // };
+    auto save = [](auto& hist, const std::string& file, bool logY = false) {
+        std::cout << "Saving histogram: " << file << "\n";
 
-    // std::cout << "Saving evaluation histograms\n";
+        TCanvas canvas(("canvas_" + std::string(hist->GetName())).c_str(), "", 1000, 800);
+        canvas.SetLeftMargin(0.14);
+        canvas.SetBottomMargin(0.13);
+        canvas.SetTicks(1, 1);
 
-    // save(hLeadingPt,  "Images/bdt_predicted_LeadingMuon_pt.png");
-    // save(hLeadingEta, "Images/bdt_predicted_LeadingMuon_eta.png");
-    // save(hLeadingPhi, "Images/bdt_predicted_LeadingMuon_phi.png");
-    // save(hSubPt,      "Images/bdt_predicted_SubleadingMuon_pt.png");
-    // save(hSubEta,     "Images/bdt_predicted_SubleadingMuon_eta.png");
-    // save(hSubPhi,     "Images/bdt_predicted_SubleadingMuon_phi.png");
-    // save(hMass,       "Images/bdt_predicted_Dimuon_mass.png");
-    // save(hPt,         "Images/bdt_predicted_Dimuon_pt.png");
-    // save(hRap,        "Images/bdt_predicted_Dimuon_rapidity.png");
-    // save(hPhi,        "Images/bdt_predicted_Dimuon_phi.png");
+        if (logY) {
+            canvas.SetLogy();
+            hist->SetMinimum(0.5);
+        }
 
-    // std::cout << "All evaluation histograms saved\n";
-    // std::cout << "Histogram creation END\n";
+        hist->SetStats(false);
+        hist->SetLineWidth(2);
+        hist->Draw("HIST");
+
+        canvas.SaveAs(file.c_str());
+        logValue("Evaluation histogram saved", file);
+    };
+
+    std::cout << "Saving evaluation histograms\n";
+
+    save(hLeadingPt,  "Images/bdt_predicted_LeadingMuon_pt.png");
+    save(hLeadingEta, "Images/bdt_predicted_LeadingMuon_eta.png");
+    save(hLeadingPhi, "Images/bdt_predicted_LeadingMuon_phi.png");
+    save(hSubPt,      "Images/bdt_predicted_SubleadingMuon_pt.png");
+    save(hSubEta,     "Images/bdt_predicted_SubleadingMuon_eta.png");
+    save(hSubPhi,     "Images/bdt_predicted_SubleadingMuon_phi.png");
+    save(hMass,       "Images/bdt_predicted_Dimuon_mass.png");
+    save(hMass,       "Images/bdt_predicted_Dimuon_mass_log.png", true);
+    save(hPt,         "Images/bdt_predicted_Dimuon_pt.png");
+    save(hRap,        "Images/bdt_predicted_Dimuon_rapidity.png");
+    save(hPhi,        "Images/bdt_predicted_Dimuon_phi.png");
+
+    std::cout << "All evaluation histograms saved\n";
+    std::cout << "Histogram creation END\n";
 
     logElapsedTime("BDT evaluation COMPLETE");
 

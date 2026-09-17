@@ -500,7 +500,7 @@ void MlRun()
     const size_t DevelopmentFilesPerSample = 2;
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
-    const double DatasetUsagePercentage = 1.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
+    const double DatasetUsagePercentage = 10.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
     const double EvaluationUsagePercentage = 100.00;//Cuts if the data set is still so big and dont fit into memory.
     const double HistogramUsagePercentage = 100.00;
     
@@ -530,11 +530,11 @@ void MlRun()
         "Background_dataset_files/qcd_pt20to30_xrootd_files.txt"
     };
 
-    const size_t MaxMuons = 3;//The data is cutted up to N muons so only 2 first muons will be slit into columns .
+    const size_t MaxMuons = 2;//The data is cutted up to N muons so only 2 first muons will be slit into columns .
     const std::vector<std::string> features = getBdtFeatureNames(MaxMuons);
 
-    const unsigned int numberOfTrees = 20;
-    const unsigned int maximumDepth = 25;//A depth-three tree can represent interactions among several variables.
+    const unsigned int numberOfTrees = 5;
+    const unsigned int maximumDepth = 50;//A depth-three tree can represent interactions among several variables.
     const double minimumNodeSizePercent = 0.001;//This controls how small a tree node is allowed to become.
     const double baggedSampleFraction = 0.05;//It can reduce correlations between trees and decrease overfitting. PVZ Only 20 % is used
     const unsigned int numberOfCuts = 30;//More cuts can improve split resolution but increase computation. TMVA evaluates a finite set of candidate positions
@@ -695,11 +695,6 @@ void MlRun()
     cachedColumns.emplace_back("Index");
     cachedColumns.emplace_back("IsDyProcess");
     cachedColumns.emplace_back("IsTraining");
-
-    // Required by the histogram
-    // cachedColumns.emplace_back("Muon_pt");
-    // cachedColumns.emplace_back("Muon_eta");
-    // cachedColumns.emplace_back("Muon_phi");
 
     auto cachedBdtData = dfWithSplit.Cache(cachedColumns);
 
