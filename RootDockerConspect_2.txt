@@ -1,0 +1,84 @@
+SUGGESTED MONTECARLO DATA DOWNLOADING AND COMPARISON:
+
+docker images - List downloaded Docker images
+cernopendata/cernopendata-client:latest - is used to get metadata and file URLs from CERN Open Data.
+--recid 30558 means: get files for CERN Open Data record with ID 30558.
+--protocol xrootd means: return file paths in XRootD remote-access format, for example paths starting with root://....
+> files.txt is not Docker syntax. It is PowerShell or terminal redirection. It saves the printed output into a local file called files.txt.
+cmscloud/root-vnc:latest - is used to open and analyse ROOT files, including remote ROOT files over XRootD.
+cmscloud/python-vnc:latest - would be useful if you want Python analysis with packages like uproot, awkward, numpy, matplotlib, and Jupyter. CERN describes this Python image as containing a HEP Python stack with packages such as awkward, uproot, numpy, matplotlib, and jupyterlab.
+docker run --rm - after end will delete the container
+docker run -it means interactive terminal.
+docker run -v "${PWD}:/code" - connects your current Windows folder to /code inside the container.
+
+Get data use cernopendata/cernopendata-client for data get and then remove it after end:
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 30563 --protocol xrootd > SingleMuon/files-recid-30563.txt
+
+docker run -it --name cmscloud -v "%cd%\SingleMuon":/work -w /work cmscloud/root-vnc
+OR RESTART EXISTING docker start -ai cmscloud
+root -l
+
+
+To avoid: 1 start wsl, 2 docker!
+(OnError: wsl --shutdown Stop-Service vmcompute Start-Service vmcompute)
+
+
+gSystem->Exec("clear"); - clean chat in root
+.q - quit Root
+To stop container from inside "exit"
+
+
+SOMETIMES ROO SAVES FILES INCORRECTLY
+lIKE root://eospublic.cern.ch//eos/opendata/cms/Run2016H/SingleMuon/NANOAOD/UL2016_MiniAODv2_NanoAODv9-v1/120000/61FC1E38-F75C-6B44-AD19-A9894155874E.root^[[0m$ WTF
+cd /work
+sed -i 's/\r$//' files-recid-30563.txt
+head -1 files-recid-30563.txt | cat -A
+The problem was with -it.
+Use docker run --rm cernopendata/cernopendata-client get-file-locations --recid 30563 --protocol xrootd > SingleMuon/files-recid-30563.txt
+
+
+FILE SAVE_FIRST_EVENT.C ACTIVALTION
+root -l -b -q save_first_event.c > save_log.txt
+void save_first_event()
+
+root -l -b -q 'filter_dy1.c' -e 'printCount()'
+
+
+-----ANALYSIS------
+How to read the trigger names: The general structure is: L1_ObjectThreshold_ExtraCondition
+
+HLT - High-Level Trigger, the software trigger stage in CMS
+Iso - Isolated, meaning little extra particle activity near the muon
+HLT_IsoMu24 - Isolated MIuon with approximate transverse momentum threshold, pT ≳ 24 GeV
+
+Invariant mass is one of the most important tools in particle physics because unstable particles are found as peaks in invariant mass histograms.
+
+A differential Drell-Yan cross section tells you how often Drell-Yan events occur as a function of some measured variable, not just the total probability.
+-----------
+
+The general structure once again
+TTree Events -> Table of CMS collision events
+One tree entry -> One collision event
+One branch -> One stored quantity, for example Muon_pt, nMuon, HLT_IsoMu24
+Branch value at entry i -> Value of that quantity for event i
+
+----NORMALIZATION PRACTICE:
+normtag_PHYSICS_pp_2016.json CMS had several luminosity-measurement systems. The normtag selects the preferred calibrated luminometer for each luminosity section. The official 2016 luminosity record states that the best luminometer for each section is recorded in this normtag. The normtag therefore tells brilcalc which calibration source to use, while the certification JSON tells it which sections are acceptable.
+
+curl.exe -L "https://opendata.cern.ch/record/1059/files/normtag_PHYSICS_pp_2016.json" -o normtag_PHYSICS_pp_2016.json
+
+We ran the CMS brilcalc tool in the official Docker container:The CMS guide recommends using brilcalc --byls --output-style csv when luminosity values are needed separately for each luminosity section
+
+docker run --rm -v "${PWD}:/work" -w /work gitlab-registry.cern.ch/cms-cloud/brilws-docker bash -lc "brilcalc lumi -c web --byls --output-style csv --begin 281613 --end 284044 -i /work/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON_MuonPhys.txt --normtag /work/normtag_PHYSICS_pp_2016.json -u /fb > /work/Run2016H_MuonPhys_lumibyls.csv"
+
+This produces a machine-readable comma-separated table that the C++ code can parse. Therefore, the CSV does not contain arbitrary data-taking sections. It contains sections allowed by the certification selection.
+
+#Data tag : 24v2 , Norm tag: None
+#run:fill,ls,time,beamstatus,E(GeV),delivered(/fb),recorded(/fb),avgpu,source
+281613:5331,101:101,09/25/16 06:03:32,STABLE BEAMS,6500,0.000016597,0.000001612,32.3,HFOC
+For this row: 281613:5331 means: run: 281613; LHC fill: 5331. 
+101:101 means CMS luminosity section 101.
+STABLE BEAMS means the LHC beams were declared stable for physics data taking.
+6500 is the beam energy in GeV per proton beam.
+delivered(/fb) = 0.000016597 is the luminosity delivered by the LHC to CMS.
+recorded(/fb) = 0.000001612 is the luminosity corresponding to data successfully recorded by CMS.

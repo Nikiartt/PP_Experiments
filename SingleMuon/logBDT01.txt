@@ -1,0 +1,64 @@
+Drell-Yan filter log
+
+MlRun: 1
+Development mode: 1
+Development files per sample: 2
+main_dy cross section [pb]: 5396
+main_dy sum gen weights: 2.61031e+06
+main_dy normalization: 2.06719
+ttbar cross section [pb]: 687.1
+ttbar sum gen weights: 1.00679e+08
+ttbar normalization: 0.00682465
+single_top_tw cross section [pb]: 32.45
+single_top_tw sum gen weights: 5.25612e+06
+single_top_tw normalization: 0.00617375
+single_antitop_tw cross section [pb]: 32.51
+single_antitop_tw sum gen weights: 6.82663e+06
+single_antitop_tw normalization: 0.00476223
+ww cross section [pb]: 75.88
+ww sum gen weights: 3.61203e+06
+ww normalization: 0.0210076
+wz cross section [pb]: 27.56
+wz sum gen weights: 1.524e+06
+wz normalization: 0.018084
+zz cross section [pb]: 12.08
+zz sum gen weights: 65000
+zz normalization: 0.185846
+wjets cross section [pb]: 54110
+wjets sum gen weights: 2.56642e+11
+wjets normalization: 0.000210838
+qcd_pt20to30 cross section [pb]: 2.529e+06
+qcd_pt20to30 sum gen weights: 3.55223e+06
+qcd_pt20to30 normalization: 711.948
+MC file loading and normalization END elapsed time: 25.9857 s
+Muon and dimuon input columns END elapsed time: 27.4443 s
+Main DY events passing original filters: 356519
+Original DY filter labeling END elapsed time: 88.2347 s
+Labeled dataset snapshot END elapsed time: 142.29 s
+Signal events: 39098
+Background events: 1687366
+Training events: 1209106
+Testing events: 517358
+Normalized signal weight: 80822.9
+Normalized background weight: 2.78308e+08
+Dataset counting and splitting END elapsed time: 144.089 s
+Trained model: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml
+BDT training END elapsed time: 958.386 s
+
+[BDT evaluation]
+Evaluated events: 517358
+Decision threshold: 0
+Weighted true positives: 18247.1
+Weighted true negatives: 8.04425e+07
+Weighted false positives: 3.12359e+06
+Weighted false negatives: 6034.12
+Weighted accuracy: 0.96256
+Weighted precision: 0.00580777
+Weighted recall: 0.75149
+Weighted background rejection: 0.962621
+Weighted F1: 0.0115264
+Weighted ROC AUC: 0.906509
+S/sqrt(S+B): 10.2944
+Results file: MlTemp/ML_DY_evaluation.root
+BDT evaluation END elapsed time: 1005.62 s
+MlRun complete elapsed time: 1005.65 s

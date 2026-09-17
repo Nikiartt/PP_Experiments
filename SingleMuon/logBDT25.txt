@@ -1,0 +1,60 @@
+Drell-Yan log
+
+--- ML RUN SETTINGS ---
+Training fraction: 0.7
+Testing fraction: 0.3
+Development mode: 1
+Development files per sample: 2
+Training threads: 4
+Dataset usage [%]: 1
+[BDT model parameters]
+Method: BDTG
+Boost type: Gradient
+Number of trees: 30
+Maximum depth: 3
+Minimum node size [%]: 0.005
+Bagged sample fraction: 0.2
+Number of cuts: 10
+Shrinkage: 0.05
+Random seed: 1
+Decision threshold: 0
+------
+--- CREATE TRAINING AND TESTING DATA ---
+Training fraction: 0.7
+Testing fraction: 0.3
+Training/testing dataframes created elapsed time: 31.4324 s
+lazy RDataFrame computations START elapsed time: 31.4519 s
+lazy RDataFrame computations END elapsed time: 211.131 s
+addEventsToTmva START elapsed time: 211.149 s
+addEventsToTmva END elapsed time: 213.153 s
+Training events total: 106603
+
+--- BDT TRAINING DATA ---
+Dataset usage (%): 1
+Training signal: 2454
+Training background: 104149
+Testing signal: 1058
+Testing background: 44590
+
+--- BASELINE ---
+Training baseline accuracy (always background): 0.97698
+Testing baseline accuracy (always background): 0.976823
+Trained model: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml
+BDT training END elapsed time: 226.467 s
+
+--- BDT evaluation ---
+Evaluated events: 1144835
+Decision threshold: 0
+True positives: 26696
+True negatives: 1.0973e+06
+False positives: 20799
+False negatives: 43
+Accuracy: 0.981795
+PRECISION: 0.56208
+Recall: 0.998392
+Background rejection: 0.981398
+F1: 0.719239
+ROC AUC: 0.995887
+S/sqrt(S+B): 122.496
+BDT evaluation END elapsed time: 302.281 s
+MlRun complete elapsed time: 302.302 s

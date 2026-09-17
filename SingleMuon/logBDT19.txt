@@ -1,0 +1,82 @@
+Drell-Yan log
+
+--- ML RUN SETTINGS ---
+Use prepared data: 0
+Training dataset: MlTemp/ML_DY_training.root
+Testing dataset: MlTemp/ML_DY_testing.root
+Training fraction: 0.7
+Testing fraction: 0.3
+Development mode: 1
+Development files per sample: 3
+Maximum muons/event: 4
+Muons used as features: 2
+Number of features: 26
+Training threads: 4
+[Features]
+Feature: MuonCount
+Feature: MET_pt
+Feature: Muon0_pt
+Feature: Muon0_eta
+Feature: Muon0_phi
+Feature: Muon0_charge
+Feature: Muon0_isGlobal
+Feature: Muon0_nStations
+Feature: Muon0_nTrackerLayers
+Feature: Muon0_dxy
+Feature: Muon0_ptRelErr
+Feature: Muon0_tkRelIso
+Feature: Muon1_pt
+Feature: Muon1_eta
+Feature: Muon1_phi
+Feature: Muon1_charge
+Feature: Muon1_isGlobal
+Feature: Muon1_nStations
+Feature: Muon1_nTrackerLayers
+Feature: Muon1_dxy
+Feature: Muon1_ptRelErr
+Feature: Muon1_tkRelIso
+Feature: Dimuon_mass
+Feature: Dimuon_deltaPhi
+Feature: Dimuon_deltaR
+Feature: Dimuon_openingAngle3D
+[BDT model parameters]
+Method: BDTG
+Number of trees: 100
+Maximum depth: 4
+Minimum node size [%]: 0.01
+Bagged sample fraction: 0.5
+Number of cuts: 50
+Shrinkage: 0.05
+Random seed: 1
+Decision threshold: 0
+------
+--- CREATE TRAINING AND TESTING DATA ---
+DY files: 3
+All MC files: 27
+Signal before split: 643429
+Background before split: 829449
+Training/testing files created elapsed time: 237.008 s
+Training signal: 449576
+Training background: 580652
+Testing signal: 193853
+Testing background: 248797
+Trained model: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml
+BDT training END elapsed time: 584.183 s
+
+[BDT evaluation]
+Evaluated events: 442649
+Decision threshold: 0
+True positives: 182334
+True negatives: 220498
+False positives: 28298
+False negatives: 11519
+Accuracy: 0.910048
+PRECISION: 0.865652
+Recall: 0.940579
+Background rejection: 0.88626
+F1: 0.901561
+ROC AUC: 0.971965
+S/sqrt(S+B): 397.288
+Results file: MlTemp/ML_DY_evaluation.root
+BDT evaluation END elapsed time: 595.712 s
+MlRun complete elapsed time: 595.739 s

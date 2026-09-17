@@ -1,0 +1,50 @@
+Drell-Yan log
+
+Use prepared data: 1
+Training dataset: MlTemp/ML_DY_training.root
+Testing dataset: MlTemp/ML_DY_testing.root
+Development mode: 1
+Development files per sample: 3
+--- BDT training parameters ---
+[BDT model parameters]
+Method: BDTG
+Boost type: Gradient
+Number of trees: 150
+Maximum depth: 10
+Minimum node size [%]: 0.005
+Bagged sample fraction: 0.7
+Number of cuts: 30
+Shrinkage: 0.05
+Random seed: 1
+Decision threshold: 0
+Number of features: 6
+Training threads: 6
+---
+Using existing prepared training and testing datasets
+Prepared datasets loaded elapsed time: 0.634234 s
+Feature: LeadingMuon_pt
+Feature: LeadingMuon_eta
+Feature: SubleadingMuon_pt
+Feature: SubleadingMuon_eta
+Feature: Dimuon_pt
+Feature: Dimuon_rapidity
+Trained model: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml
+BDT training END elapsed time: 2471.87 s
+
+[BDT evaluation]
+Evaluated events: 1397398
+Decision threshold: 0
+Weighted true positives: 15746.4
+Weighted true negatives: 8.12155e+07
+Weighted false positives: 2.13472e+06
+Weighted false negatives: 1740
+Weighted accuracy: 0.974373
+WEIGHTED PRECISION: 0.00732233
+Weighted recall: 0.900494
+Weighted background rejection: 0.974389
+Weighted F1: 0.0145265
+Weighted ROC AUC: 0.975056
+S/sqrt(S+B): 10.7378
+Results file: MlTemp/ML_DY_evaluation.root
+BDT evaluation END elapsed time: 2597.98 s
+MlRun complete elapsed time: 2598.01 s

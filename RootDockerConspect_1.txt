@@ -1,0 +1,82 @@
+cd C:\Users\arturasn\Desktop\LEARN\Particle Physics PP\PP_Experiments\cms_jetht_test
+
+(OnError: Stop-Service vmcompute Start-Service vmcompute)
+
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 30558 --protocol xrootd > files.txt
+
+docker run -it --name cmscloud -v "%cd%\DYJetsToLL_M_50":/work -w /work cmscloud/root-vnc
+
+docker start -ai cmscloud
+
+root -l
+
+c1->SaveAs("temp.png");
+
+docker rm cmscloud
+
+----DownloadSample----
+root -l
+.x $ROOTSYS/tutorials/hsimple.C
+.q
+root -l hsimple.root
+.ls
+
+OR 
+
+rm -f hsimple.root
+root -l -b -q '$ROOTSYS/tutorials/hsimple.C'
+root -l hsimple.root
+
+-------------------------
+pip install cernopendata-client
+python3 -m pip show cernopendata-client
+cernopendata-client get-file-locations --recid 35671 --protocol xrootd > dyjets_xrootd_files.txt
+
+"""
+cernopendata-client	 -> Runs the CERN Open Data command-line tool.
+get-file-locations	-> Asks CERN Open Data to list the physical file locations for a dataset.
+--recid 35671	-> Uses CERN Open Data record ID 35671.
+--protocol xrootd	-> Requests remote streaming links in XRootD format.
+>	-> Redirects terminal output into a file.
+dyjets_xrootd_files.txt	-> Text file where the list of remote ROOT file URLs is saved.
+
+Docker Images:
+
+rootproject/root -> Official ROOT environment image -> Use it when you want a clean CERN ROOT installation for C++ ROOT macros, ROOT files, histograms, TTree, RDataFrame, and general ROOT analysis.
+
+cmscloud/root-vnc -> CMS-oriented ROOT image with VNC/graphics support -> Useful when you want ROOT plus graphical display support, for example opening canvases, using GUI tools, or saving/seeing plots more conveniently.
+
+cernopendata/cernopendata-client ->  Image focused on the CERN Open Data command-line client Useful mainly for commands like cernopendata-client get-file-locations, downloading metadata, getting XRootD links, or working with CERN Open Data records.
+"""
+
+
+-----HOW TO ANALYZE THE DATA SET-----
+root -l -b -q inspect_tree.C > tree_structure.txt   <-- Saves otpout as a text
+
+ root://eospublic.cern.ch//eos/opendata/cms/mc/RunIISummer20UL16NanoAODv9/DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8/NANOAODSIM/106X_mcRun2_asymptotic_v17-v1/40000/14B6A8AE-C9FE-D744-80A4-DDE5D008C1CD.root
+ 
+ //eos/opendata/cms/ <- This is the path inside CERN EOS storage.
+ mc <-  This means Monte Carlo.  So this is not real detector collision data. It is simulated CMS data.
+ RunIISummer20UL16NanoAODv9 <- RunII(CMS Run 2 period), Summer20(Monte Carlo production campaign), UL16(Ultra Legacy 2016 conditions), NanoAODv9(NanoAOD version 9 format).DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8 <- Drell-Yan plus jets, decaying to charged leptons, M-50(dilepton invariant mass generated above 50 GeV), TuneCP5(CMS Monte Carlo tune setting), 13TeV(proton-proton collision energy), madgraphMLM(event generation method with MadGraph and MLM jet matching), pythia8(parton showering and hadronization done with Pythia 8). So process is: qbar -> gamma*/Z -> l+ l- with dilepton mass above 50 GeV. 
+
+Branches = columns (but not detectors)
+A branch is: stored variable or reconstructed quantity and not a detector channel.
+The CMS detector actually contains millions of readout channels.
+Detector subsystem: Silicon tracker(~75 million), ECAL(~76 thousand crystals), HCAL(thousands of channels), Muon chambers(hundreds of thousands)...
+Instead, NanoAOD format stores processed high-level physics quantities.
+The real chain is: proton-proton collision  -> detector signals  -> digitization  -> reconstruction algorithms  -> physics objects  -> NanoAOD branches
+Why there are so many branches? Because CMS stores many kinds of information.
+
+A RUN is a long continuous data-taking period. A run may last from minutes to hours. So run tells: "Under which detector/accelerator conditions was this event recorded".
+LUMINOSITYBLOCK Inside a run, CMS divides time into smaller chunks called luminosity blocks. A luminosity block is roughly: ~23 seconds of data-taking. So luminosity blocks help with: Data quality monitoring(to reject bad periods), Luminosity calculations(to integrated luminosity accounting), Trigger monitoring(trigger-rate studies), Bookkeeping(detector status tracking)
+EVENT This is the actual collision-event number. Each proton-proton collision event gets a unique event identifier inside the run/luminosity-block structure.
+So: (run, luminosityBlock, event)
+Run
+ ├── Luminosity block
+ │     ├── Event
+ │     ├── Event
+ │     ├── Event
+ │     └── ...
+ ├── Luminosity block
+ └── ...
+-------------------------------------

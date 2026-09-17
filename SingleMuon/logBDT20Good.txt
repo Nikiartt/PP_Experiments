@@ -1,0 +1,45 @@
+Drell-Yan log
+
+--- ML RUN SETTINGS ---
+Use prepared data: 1
+Training dataset: MlTemp/ML_DY_training.root
+Testing dataset: MlTemp/ML_DY_testing.root
+Training fraction: 0.7
+Testing fraction: 0.3
+Development mode: 1
+Development files per sample: 2
+Training threads: 4
+Dataset usage [%]: 5
+[BDT model parameters]
+Method: BDTG
+Boost type: Gradient
+Number of trees: 30
+Maximum depth: 6
+Minimum node size [%]: 0.005
+Bagged sample fraction: 0.3
+Number of cuts: 30
+Shrinkage: 0.05
+Random seed: 1
+Decision threshold: 0
+------
+--- LOAD EXISTING TRAINING AND TESTING DATA ---
+Trained model: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml
+BDT training END elapsed time: 142.255 s
+
+[BDT evaluation]
+Evaluated events: 4581630
+Decision threshold: 0
+True positives: 106671
+True negatives: 4.42353e+06
+False positives: 51200
+False negatives: 229
+Accuracy: 0.988775
+PRECISION: 0.675685
+Recall: 0.997858
+Background rejection: 0.988558
+F1: 0.80576
+ROC AUC: 0.997949
+S/sqrt(S+B): 268.47
+Results file: MlTemp/ML_DY_evaluation.root
+BDT evaluation END elapsed time: 179.499 s
+MlRun complete elapsed time: 179.527 s

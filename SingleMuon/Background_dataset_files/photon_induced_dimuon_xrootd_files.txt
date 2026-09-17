@@ -1,0 +1,1 @@
+root://eospublic.cern.ch//eos/opendata/cms/mc/RunIISummer20UL16NanoAODv9/GGToMuMu_Pt-25_Inel-Inel_13TeV-lpair/NANOAODSIM/106X_mcRun2_asymptotic_v17-v1/270000/F4775A24-2A7B-284A-84DF-6520F51A6963.root

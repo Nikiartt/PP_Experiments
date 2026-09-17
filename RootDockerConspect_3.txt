@@ -1,0 +1,34 @@
+MC appending with the backgroud data for the processes:
+pp→ttˉ Top-antitop production https://opendata.cern.ch/record/67801
+pp→γ∗/Z→ttˉ−→μ+μ−+4ν Drell–Yan tau-pair production https://opendata.cern.ch/record/35671
+pp→tW Single-top tW production https://opendata.cern.ch/record/64881
+pp→tˉW Single-antitop tbarW production https://opendata.cern.ch/record/64825
+pp→WW diboson production 1 https://opendata.cern.ch/record/72696
+pp→WZ diboson production 2 https://opendata.cern.ch/record/72754
+pp→ZZ diboson production 3 https://opendata.cern.ch/record/75593
+pp→W+jets boson jests production https://opendata.cern.ch/record/69747
+pp→jets QCD https://opendata.cern.ch/record/63186 (depends on transverse-momentum scale 15–20,20–30,30–50,…   I used 20–30 GeV as start point) 
+pp -> γγ→ℓ+ℓ− https://opendata.cern.ch/record/36306
+
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 67801 --protocol xrootd > Background_dataset_files/ttbar_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 35671 --protocol xrootd > Background_dataset_files/dytaupair_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 64881 --protocol xrootd > Background_dataset_files/single_top_tw_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 64825 --protocol xrootd > Background_dataset_files/single_antitop_tw_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 72696 --protocol xrootd > Background_dataset_files/ww_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 72754 --protocol xrootd > Background_dataset_files/wz_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 75593 --protocol xrootd > Background_dataset_files/zz_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 69747 --protocol xrootd > Background_dataset_files/wjets_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 63186 --protocol xrootd > Background_dataset_files/qcd_pt20to30_xrootd_files.txt
+docker run --rm cernopendata/cernopendata-client get-file-locations --recid 36306 --protocol xrootd > Background_dataset_files/photon_induced_dimuon_xrootd_files.txt
+
+
+{
+    IF   root://eospublic.cern....
+
+    for f in Background_dataset_files/*.txt; do sed -i $'1s/^\xEF\xBB\xBF//; 1s/^\xEF\xBF\xBD//' "$f"; sed -i 's/\r$//' "$f"; sed -i '/^[[:space:]]*$/d' "$f"; done
+
+    file Background_dataset_files/*.txt
+    head -n 1 Background_dataset_files/ttbar_xrootd_files.txt
+}
+
+

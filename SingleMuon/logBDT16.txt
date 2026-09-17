@@ -1,0 +1,74 @@
+Drell-Yan log
+
+--- ML RUN SETTINGS ---
+Use prepared data: 0
+Training dataset: MlTemp/ML_DY_training.root
+Testing dataset: MlTemp/ML_DY_testing.root
+Training fraction: 0.7
+Testing fraction: 0.3
+Development mode: 1
+Development files per sample: 3
+Training threads: 6
+[Features]
+Feature: LeadingMuon_pt
+Feature: SubleadingMuon_pt
+Feature: LeadingMuon_eta
+Feature: SubleadingMuon_eta
+Feature: LeadingMuon_tkRelIso
+Feature: SubleadingMuon_tkRelIso
+Feature: LeadingMuon_dxy
+Feature: SubleadingMuon_dxy
+Feature: LeadingMuon_ptRelErr
+Feature: SubleadingMuon_ptRelErr
+Feature: LeadingMuon_nStations
+Feature: SubleadingMuon_nStations
+Feature: LeadingMuon_nTrackerLayers
+Feature: SubleadingMuon_nTrackerLayers
+Feature: Dimuon_mass
+Feature: Dimuon_pt
+Feature: Dimuon_rapidity
+Feature: Dimuon_deltaPhi
+Feature: Dimuon_deltaR
+Feature: Dimuon_openingAngle3D
+Feature: MET_pt
+[BDT model parameters]
+Method: BDTG
+Boost type: Gradient
+Number of trees: 60
+Maximum depth: 6
+Minimum node size [%]: 0.005
+Bagged sample fraction: 0.7
+Number of cuts: 40
+Shrinkage: 0.05
+Random seed: 1
+Decision threshold: 0
+------
+--- CREATE TRAINING AND TESTING DATA ---
+DY files: 3
+All MC files: 27
+DY events passing FullFilterDF: 644065
+Training/testing files created elapsed time: 174.174 s
+Training signal: 25650
+Training background: 1865618
+Testing signal: 35869
+Testing background: 773032
+Trained model: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml
+BDT training END elapsed time: 785.252 s
+
+[BDT evaluation]
+Evaluated events: 808900
+Decision threshold: 0
+True positives: 33369
+True negatives: 551339
+False positives: 221692
+False negatives: 2500
+Accuracy: 0.722843
+PRECISION: 0.130828
+Recall: 0.930302
+Background rejection: 0.713217
+F1: 0.229395
+ROC AUC: 0.858288
+S/sqrt(S+B): 66.0726
+Results file: MlTemp/ML_DY_evaluation.root
+BDT evaluation END elapsed time: 809.139 s
+MlRun complete elapsed time: 809.172 s

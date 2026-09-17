@@ -1,0 +1,134 @@
+
+DataSetInfo              : [DY_BDT_dataset] : Added class "Background"
+DataSetInfo              : [DY_BDT_dataset] : Added class "Signal"
+                         : Add Tree TrainAssignTree_Background of type Background with 1202578 events
+                         : Add Tree TestAssignTree_Background of type Background with 515201 events
+                         : Add Tree TrainAssignTree_Signal of type Signal with 6027 events
+                         : Add Tree TestAssignTree_Signal of type Signal with 2658 events
+                         : Dataset[DY_BDT_dataset] : Class index : 0  name : Background
+                         : Dataset[DY_BDT_dataset] : Class index : 1  name : Signal
+Factory                  : Booking method: [1mBDTG[0m
+                         : 
+                         : the option NegWeightTreatment=InverseBoostNegWeights does not exist for BoostType=Grad
+                         : --> change to new default NegWeightTreatment=Pray
+                         : Rebuilding Dataset DY_BDT_dataset
+                         : Building event vectors for type 0 Background
+                         : Dataset[DY_BDT_dataset] :  create input formulas for tree TrainAssignTree_Background
+                         : Building event vectors for type 1 Background
+                         : Dataset[DY_BDT_dataset] :  create input formulas for tree TestAssignTree_Background
+                         : Building event vectors for type 0 Signal
+                         : Dataset[DY_BDT_dataset] :  create input formulas for tree TrainAssignTree_Signal
+                         : Building event vectors for type 1 Signal
+                         : Dataset[DY_BDT_dataset] :  create input formulas for tree TestAssignTree_Signal
+DataSetFactory           : [DY_BDT_dataset] : Number of events in input trees
+                         : 
+                         : 
+                         : Dataset[DY_BDT_dataset] : No weight renormalisation applied: use original global and event weights
+DataSetInfo              : Correlation matrix (Background):
+                         : -----------------------------------------------------------------------------------------------------------------
+                         :                     LeadingMuon_pt LeadingMuon_eta SubleadingMuon_pt SubleadingMuon_eta Dimuon_pt Dimuon_rapidity
+                         :     LeadingMuon_pt:         +1.000          +0.002            +0.046             +0.001    +1.000          +0.003
+                         :    LeadingMuon_eta:         +0.002          +1.000            +0.001             +0.287    +0.002          +0.880
+                         :  SubleadingMuon_pt:         +0.046          +0.001            +1.000             +0.002    +0.046          +0.002
+                         : SubleadingMuon_eta:         +0.001          +0.287            +0.002             +1.000    +0.001          +0.689
+                         :          Dimuon_pt:         +1.000          +0.002            +0.046             +0.001    +1.000          +0.003
+                         :    Dimuon_rapidity:         +0.003          +0.880            +0.002             +0.689    +0.003          +1.000
+                         : -----------------------------------------------------------------------------------------------------------------
+DataSetInfo              : Correlation matrix (Signal):
+                         : -----------------------------------------------------------------------------------------------------------------
+                         :                     LeadingMuon_pt LeadingMuon_eta SubleadingMuon_pt SubleadingMuon_eta Dimuon_pt Dimuon_rapidity
+                         :     LeadingMuon_pt:         +1.000          +0.005            +0.054             +0.015    +0.999          +0.006
+                         :    LeadingMuon_eta:         +0.005          +1.000            -0.005             +0.367    +0.005          +0.883
+                         :  SubleadingMuon_pt:         +0.054          -0.005            +1.000             -0.018    +0.051          -0.010
+                         : SubleadingMuon_eta:         +0.015          +0.367            -0.018             +1.000    +0.015          +0.745
+                         :          Dimuon_pt:         +0.999          +0.005            +0.051             +0.015    +1.000          +0.006
+                         :    Dimuon_rapidity:         +0.006          +0.883            -0.010             +0.745    +0.006          +1.000
+                         : -----------------------------------------------------------------------------------------------------------------
+DataSetFactory           : [DY_BDT_dataset] :  
+                         : 
+Factory                  : [1mTrain all methods[0m
+Factory                  : [DY_BDT_dataset] : Create Transformation "I" with events from all classes.
+                         : 
+                         : Transformation, Variable selection : 
+                         : Input : variable 'LeadingMuon_pt' <---> Output : variable 'LeadingMuon_pt'
+                         : Input : variable 'LeadingMuon_eta' <---> Output : variable 'LeadingMuon_eta'
+                         : Input : variable 'SubleadingMuon_pt' <---> Output : variable 'SubleadingMuon_pt'
+                         : Input : variable 'SubleadingMuon_eta' <---> Output : variable 'SubleadingMuon_eta'
+                         : Input : variable 'Dimuon_pt' <---> Output : variable 'Dimuon_pt'
+                         : Input : variable 'Dimuon_rapidity' <---> Output : variable 'Dimuon_rapidity'
+TFHandler_Factory        :           Variable                  Mean                  RMS          [        Min                  Max ]
+                         : -------------------------------------------------------------------------------------------------------------
+                         :     LeadingMuon_pt:              39.231              1417.2   [              3.0003          1.1087e+06 ]
+                         :    LeadingMuon_eta:            0.013432              1.3368   [             -8.8945              9.2090 ]
+                         :  SubleadingMuon_pt:              5.7098              27.934   [              3.0000              26738. ]
+                         : SubleadingMuon_eta:            0.010084              1.4316   [             -9.5781              7.9580 ]
+                         :          Dimuon_pt:              40.760              1417.2   [           0.0068092          1.1087e+06 ]
+                         :    Dimuon_rapidity:            0.012628              1.1294   [             -5.9184              6.7140 ]
+                         : -------------------------------------------------------------------------------------------------------------
+                         : Ranking input variables (method unspecific)...
+IdTransformation         : Ranking result (top variable is best ranked)
+                         : -------------------------------------------
+                         : Rank : Variable           : Separation
+                         : -------------------------------------------
+                         :    1 : SubleadingMuon_pt  : 7.341e-01
+                         :    2 : SubleadingMuon_eta : 8.337e-03
+                         :    3 : Dimuon_rapidity    : 4.331e-03
+                         :    4 : LeadingMuon_eta    : 2.595e-03
+                         :    5 : LeadingMuon_pt     : 1.795e-03
+                         :    6 : Dimuon_pt          : 1.623e-03
+                         : -------------------------------------------
+Factory                  : Train method: BDTG for Classification
+                         : 
+BDTG                     : #events: (reweighted) sig: 604302 bkg: 604302
+                         : #events: (unweighted) sig: 6027 bkg: 1202578
+                         : Training 5 Decision Trees ... patience please
+20%, time left: unknown
+40%, time left: 10 sec
+60%, time left: 5 sec
+80%, time left: 3 sec
+100%, time left: 1 sec
+                         : Elapsed time for training with 1208605 events: 29.4 sec         
+BDTG                     : [DY_BDT_dataset] : Evaluation of BDTG on training sample (1208605 events)
+0%, time left: unknown
+7%, time left: 0 sec
+13%, time left: 0 sec
+19%, time left: 0 sec
+25%, time left: 0 sec
+31%, time left: 0 sec
+37%, time left: 0 sec
+43%, time left: 0 sec
+50%, time left: 0 sec
+56%, time left: 0 sec
+62%, time left: 0 sec
+68%, time left: 0 sec
+75%, time left: 0 sec
+81%, time left: 0 sec
+87%, time left: 0 sec
+93%, time left: 0 sec
+                         : Elapsed time for evaluation of 1208605 events: 0.799 sec       
+                         : Creating xml weight file: [0;36mMlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml[0m
+                         : Creating standalone class: [0;36mMlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.class.C[0m
+                         : MlTemp/TMVA_DY_training.root:/DY_BDT_dataset/Method_BDT/BDTG
+Factory                  : Training finished
+                         : 
+                         : Ranking input variables (method specific)...
+BDTG                     : Ranking result (top variable is best ranked)
+                         : ----------------------------------------------------
+                         : Rank : Variable           : Variable Importance
+                         : ----------------------------------------------------
+                         :    1 : SubleadingMuon_pt  : 5.530e-01
+                         :    2 : SubleadingMuon_eta : 2.525e-01
+                         :    3 : LeadingMuon_eta    : 1.001e-01
+                         :    4 : Dimuon_rapidity    : 9.437e-02
+                         :    5 : LeadingMuon_pt     : 0.000e+00
+                         :    6 : Dimuon_pt          : 0.000e+00
+                         : ----------------------------------------------------
+Factory                  : === Destroy and recreate all methods via weight files for testing ===
+                         : 
+                         : Reading weight file: [0;36mMlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml[0m
+                         : Booking "BDTG" of type "BDT" from MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml.
+                         : Reading weight file: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml
+<HEADER> DataSetInfo              : [Default] : Added class "Background"
+<HEADER> DataSetInfo              : [Default] : Added class "Signal"
+                         : Booked classifier "BDTG" of type: "BDT"
+                         : Rebuilding Dataset Default
