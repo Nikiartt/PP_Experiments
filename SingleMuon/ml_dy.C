@@ -662,6 +662,9 @@ void evaluateDrellYanBdt(
     logValue("ROC AUC", auc);
     logValue("S/sqrt(S+B)", significance);
 
+
+
+
     // HISTOGRAMS //
     logLine("");
     logLine("--- CREATE HISTOGRAMS ---");
@@ -804,6 +807,135 @@ void evaluateDrellYanBdt(
 
     std::cout << "All evaluation histograms saved\n";
     std::cout << "Histogram creation END\n";
+
+    
+    logLine("");
+    logLine("--- CREATE MODEL DIFFERENCE HISTOGRAMS ---");
+
+    auto modelDiffDf = histogramDf
+        .Filter([](bool isDy) { return isDy; }, {"IsDyProcess"})
+        .Filter([selectedIndices](ULong64_t index) {
+            return selectedIndices->find(index) == selectedIndices->end();
+        }, {"Index"})
+        .Filter([](const ROOT::VecOps::RVec<float>& pt,
+                const ROOT::VecOps::RVec<float>& eta,
+                const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("ModelDiffMuonKinematics",
+            [](const ROOT::VecOps::RVec<float>& pt,
+            const ROOT::VecOps::RVec<float>& eta,
+            const ROOT::VecOps::RVec<float>& phi) {
+                int lead = -1, sub = -1;
+                for (size_t i = 0; i < pt.size(); ++i) {
+                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
+                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
+                }
+                return ROOT::VecOps::RVec<float>{
+                    pt[lead], eta[lead], phi[lead],
+                    pt[sub], eta[sub], phi[sub]
+                };
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("ModelDiff_LeadingMuon_pt",  "ModelDiffMuonKinematics[0]")
+        .Define("ModelDiff_LeadingMuon_eta", "ModelDiffMuonKinematics[1]")
+        .Define("ModelDiff_LeadingMuon_phi", "ModelDiffMuonKinematics[2]")
+        .Define("ModelDiff_SubleadingMuon_pt",  "ModelDiffMuonKinematics[3]")
+        .Define("ModelDiff_SubleadingMuon_eta", "ModelDiffMuonKinematics[4]")
+        .Define("ModelDiff_SubleadingMuon_phi", "ModelDiffMuonKinematics[5]")
+        .Define("ModelDiffDimuonKinematics",
+            [](float pt1, float eta1, float phi1,
+            float pt2, float eta2, float phi2) {
+                ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
+                ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
+                const auto d = a + b;
+                return ROOT::VecOps::RVec<float>{
+                    (float)d.M(), (float)d.Pt(),
+                    (float)d.Rapidity(), (float)d.Phi()
+                };
+            }, {
+                "ModelDiff_LeadingMuon_pt",
+                "ModelDiff_LeadingMuon_eta",
+                "ModelDiff_LeadingMuon_phi",
+                "ModelDiff_SubleadingMuon_pt",
+                "ModelDiff_SubleadingMuon_eta",
+                "ModelDiff_SubleadingMuon_phi"
+            })
+        .Define("ModelDiff_Dimuon_mass",     "ModelDiffDimuonKinematics[0]")
+        .Define("ModelDiff_Dimuon_pt",       "ModelDiffDimuonKinematics[1]")
+        .Define("ModelDiff_Dimuon_rapidity", "ModelDiffDimuonKinematics[2]")
+        .Define("ModelDiff_Dimuon_phi",      "ModelDiffDimuonKinematics[3]");
+
+    auto modelDiffCount = modelDiffDf.Count();
+
+    auto hDiffLeadingPt = modelDiffDf.Histo1D(
+        {"model_diff_LeadingMuon_pt", "Hard filter DY missed by BDT;Leading muon p_{T} [GeV];Events", 100, 0, 140},
+        "ModelDiff_LeadingMuon_pt");
+
+    auto hDiffLeadingEta = modelDiffDf.Histo1D(
+        {"model_diff_LeadingMuon_eta", "Hard filter DY missed by BDT;Leading muon #eta;Events", 100, -2.4, 2.4},
+        "ModelDiff_LeadingMuon_eta");
+
+    auto hDiffLeadingPhi = modelDiffDf.Histo1D(
+        {"model_diff_LeadingMuon_phi", "Hard filter DY missed by BDT;Leading muon #phi [rad];Events", 100, -3.2, 3.2},
+        "ModelDiff_LeadingMuon_phi");
+
+    auto hDiffSubPt = modelDiffDf.Histo1D(
+        {"model_diff_SubleadingMuon_pt", "Hard filter DY missed by BDT;Subleading muon p_{T} [GeV];Events", 100, 0, 140},
+        "ModelDiff_SubleadingMuon_pt");
+
+    auto hDiffSubEta = modelDiffDf.Histo1D(
+        {"model_diff_SubleadingMuon_eta", "Hard filter DY missed by BDT;Subleading muon #eta;Events", 100, -2.4, 2.4},
+        "ModelDiff_SubleadingMuon_eta");
+
+    auto hDiffSubPhi = modelDiffDf.Histo1D(
+        {"model_diff_SubleadingMuon_phi", "Hard filter DY missed by BDT;Subleading muon #phi [rad];Events", 100, -3.2, 3.2},
+        "ModelDiff_SubleadingMuon_phi");
+
+    auto hDiffMass = modelDiffDf.Histo1D(
+        {"model_diff_Dimuon_mass", "Hard filter DY missed by BDT;Dimuon mass [GeV];Events", 100, 50, 150},
+        "ModelDiff_Dimuon_mass");
+
+    auto hDiffPt = modelDiffDf.Histo1D(
+        {"model_diff_Dimuon_pt", "Hard filter DY missed by BDT;Dimuon p_{T} [GeV];Events", 100, 0, 200},
+        "ModelDiff_Dimuon_pt");
+
+    auto hDiffRap = modelDiffDf.Histo1D(
+        {"model_diff_Dimuon_rapidity", "Hard filter DY missed by BDT;Dimuon rapidity;Events", 100, -3, 3},
+        "ModelDiff_Dimuon_rapidity");
+
+    auto hDiffPhi = modelDiffDf.Histo1D(
+        {"model_diff_Dimuon_phi", "Hard filter DY missed by BDT;Dimuon #phi [rad];Events", 100, -3.2, 3.2},
+        "ModelDiff_Dimuon_phi");
+
+    std::vector<ROOT::RDF::RResultHandle> modelDiffHandles = {
+        modelDiffCount,
+        hDiffLeadingPt, hDiffLeadingEta, hDiffLeadingPhi,
+        hDiffSubPt, hDiffSubEta, hDiffSubPhi,
+        hDiffMass, hDiffPt, hDiffRap, hDiffPhi
+    };
+
+    ROOT::RDF::RunGraphs(modelDiffHandles);
+
+    std::cout << "Hard-filter DY events missed by model: "
+            << *modelDiffCount << "\n";
+
+    logValue("Hard-filter DY events missed by model", *modelDiffCount);
+
+    save(hDiffLeadingPt,  "Images/model_diff_LeadingMuon_pt.png");
+    save(hDiffLeadingEta, "Images/model_diff_LeadingMuon_eta.png");
+    save(hDiffLeadingPhi, "Images/model_diff_LeadingMuon_phi.png");
+
+    save(hDiffSubPt,  "Images/model_diff_SubleadingMuon_pt.png");
+    save(hDiffSubEta, "Images/model_diff_SubleadingMuon_eta.png");
+    save(hDiffSubPhi, "Images/model_diff_SubleadingMuon_phi.png");
+
+    save(hDiffMass, "Images/model_diff_Dimuon_mass.png");
+    save(hDiffPt,   "Images/model_diff_Dimuon_pt.png");
+    save(hDiffRap,  "Images/model_diff_Dimuon_rapidity.png");
+    save(hDiffPhi,  "Images/model_diff_Dimuon_phi.png");
+
+
+
 
     logElapsedTime("BDT evaluation COMPLETE");
 

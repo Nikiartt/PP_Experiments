@@ -485,7 +485,12 @@ std::vector<std::string> getBdtFeatureNames(size_t maxMuons) {
 // docker start -ai cmscloud
 // root -l -b -q -e '.L ML.C' -e 'MlRun()'
 
-//docker update --cpus=8 --memory=12g --memory-swap=12g cmscloud
+// notepad $env:USERPROFILE\.wslconfig
+// [wsl2]
+// memory=10GB
+// processors=6
+// swap=4GB
+// wsl --shutdown
 void MlRun()
 {
     std::cout << "MlRun started\n" << std::flush;
@@ -706,33 +711,33 @@ void MlRun()
     logElapsedTime("Training/testing dataframes created");
 
         //Main and BG events will all the amount of muons pass in the training.
-    const std::string weightsFile = trainDrellYanBdt(//
-        features,
-        trainingNode,
-        testingNode,
-        "MlTemp/TMVA_DY_training.root",
-        "MlTemp/BDT_training_history.root",
-        "DrellYanClassification",
-        "BDTG",
-        "DY_BDT_dataset",
-        numberOfTrees,
-        maximumDepth,
-        minimumNodeSizePercent,
-        baggedSampleFraction,
-        numberOfCuts,
-        shrinkage,
-        randomSeed,
-        DatasetUsagePercentage,
-        numberOfThreads
-    );
-    logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
+    // const std::string weightsFile = trainDrellYanBdt(//
+    //     features,
+    //     trainingNode,
+    //     testingNode,
+    //     "MlTemp/TMVA_DY_training.root",
+    //     "MlTemp/BDT_training_history.root",
+    //     "DrellYanClassification",
+    //     "BDTG",
+    //     "DY_BDT_dataset",
+    //     numberOfTrees,
+    //     maximumDepth,
+    //     minimumNodeSizePercent,
+    //     baggedSampleFraction,
+    //     numberOfCuts,
+    //     shrinkage,
+    //     randomSeed,
+    //     DatasetUsagePercentage,
+    //     numberOfThreads
+    // );
+    // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
 
 
     evaluateDrellYanBdt(
         features,
         testingNode,
-        weightsFile,
-        // "MlTemp/DY_BDT_dataset/weights/DrellYanClassification_BDTG.weights.xml",
+        // weightsFile,
+        "MlTemp/DY_BDT_dataset/weights/DrellYanClassification_2026_09_17_data10_depth50_trees5_cuts30_bagged0.05_minNode0.001_BDTG.weights.xml",
         "BDTG",
         decisionThreshold,
         EvaluationUsagePercentage,
