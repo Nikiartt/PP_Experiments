@@ -32,6 +32,7 @@
 #include <TH1D.h>
 #include <TSystem.h>
 #include <unordered_set>
+#include <random>
 
 struct BdtHistory {
     std::vector<double> accuracy;
@@ -447,63 +448,26 @@ std::string trainDrellYanBdt(
 }
 
 
-void evaluateDrellYanBdt(
-    const std::vector<std::string>& features,
-    ROOT::RDF::RNode testingDf,
-    const std::string& weightsFile,
-    const std::string& methodName,
-    double decisionThreshold,
-    double evaluationUsagePercentage,
-    double histogramUsagePercentage,
-    unsigned randomSeed)
+
+
+struct BdtPredictionResult {
+    double truePositive = 0.0, trueNegative = 0.0, falsePositive = 0.0, falseNegative = 0.0;
+    ULong64_t evaluatedEvents = 0;
+    std::vector<std::pair<float, int>> scoredEvents;
+    std::shared_ptr<std::unordered_set<ULong64_t>> selectedIndices = std::make_shared<std::unordered_set<ULong64_t>>();
+    std::vector<ULong64_t> rejectedIndices;
+};
+
+BdtPredictionResult RunDrellYanBdtPrediction(
+    const std::vector<std::string>& features, ROOT::RDF::RNode evaluationDf,
+    const std::string& weightsFile, const std::string& methodName, double decisionThreshold)
 {
-    std::cout << "evaluateDrellYanBdt Start\n";
-    std::cout << "Features: " << features.size() << "\n";
-    std::cout << "Weights file: " << weightsFile << "\n";
-    std::cout << "Method: " << methodName << "\n";
-    std::cout << "Decision threshold: " << decisionThreshold << "\n";
-    std::cout << "Evaluation usage: " << evaluationUsagePercentage << "%\n";
-    std::cout << "Histogram usage: " << histogramUsagePercentage << "%\n";
-
-    if (evaluationUsagePercentage <= 0.0 || evaluationUsagePercentage > 100.0)
-        throw std::runtime_error("Evaluation usage percentage must be in (0, 100]");
-
-    if (histogramUsagePercentage <= 0.0 || histogramUsagePercentage > 100.0)
-        throw std::runtime_error("Histogram usage percentage must be in (0, 100]");
-
-    const ULong64_t keepThreshold =
-        static_cast<ULong64_t>(std::llround(evaluationUsagePercentage * 100.0));
-
-    std::cout << "Evaluation keep threshold: " << keepThreshold << "/10000\n";
-    std::cout << "Applying evaluation dataset percentage filter\n";
-
-    auto evaluationDf = testingDf.Filter(
-        [keepThreshold, randomSeed](ULong64_t index) {
-            return (index * 7919ULL + randomSeed) % 10000ULL < keepThreshold;
-        }, {"Index"});
-
-    std::cout << "Cutted evaluationDf\n";
-    std::cout << "Checking evaluation features\n";
-
-    for (const auto& feature : features)
-        if (!evaluationDf.HasColumn(feature))
-            throw std::runtime_error("Missing testing feature: " + feature);
-
-    std::cout << "All " << features.size() << " evaluation features exist\n";
-
-    if (!evaluationDf.HasColumn("IsDyProcess"))
-        throw std::runtime_error("Testing dataframe is missing IsDyProcess");
-
-    std::cout << "IsDyProcess label column exists\n";
     std::cout << "Creating lazy Take actions for evaluation features\n";
 
     std::vector<ROOT::RDF::RResultPtr<std::vector<Float_t>>> columns;
     columns.reserve(features.size());
 
-    for (const auto& feature : features)
-        columns.emplace_back(evaluationDf.Take<Float_t>(feature));
-
-    std::cout << "Creating lazy Take actions for labels and indices\n";
+    for (const auto& feature : features) columns.emplace_back(evaluationDf.Take<Float_t>(feature));
 
     auto labels = evaluationDf.Take<bool>("IsDyProcess");
     auto indices = evaluationDf.Take<ULong64_t>("Index");
@@ -515,24 +479,17 @@ void evaluateDrellYanBdt(
     handles.emplace_back(labels);
     handles.emplace_back(indices);
 
-    std::cout << "Prepared " << handles.size() << " evaluation RDataFrame actions\n";
-    std::cout << "Executing evaluation RDataFrame graphs\n";
-
     ROOT::RDF::RunGraphs(handles);
 
-    std::cout << "Evaluation RDataFrame graphs completed\n";
     std::cout << "Evaluation rows loaded: " << labels->size() << "\n";
     std::cout << "Creating TMVA Reader\n";
 
     std::vector<Float_t> featureValues(features.size(), 0.0f);
     TMVA::Reader reader("!Color:!Silent");
 
-    std::cout << "Registering TMVA Reader variables\n";
-
     for (size_t i = 0; i < features.size(); ++i)
         reader.AddVariable(features[i].c_str(), &featureValues[i]);
 
-    std::cout << "Registered " << features.size() << " Reader variables\n";
     std::cout << "Loading model from: " << weightsFile << "\n";
 
     if (!reader.BookMVA(methodName.c_str(), weightsFile.c_str()))
@@ -541,10 +498,7 @@ void evaluateDrellYanBdt(
     std::cout << "Model loaded\n";
     std::cout << "Starting event-by-event model evaluation\n";
 
-    double truePositive = 0.0, trueNegative = 0.0, falsePositive = 0.0, falseNegative = 0.0;
-    ULong64_t evaluatedEvents = 0;
-    std::vector<std::pair<float, int>> scoredEvents;
-    auto selectedIndices = std::make_shared<std::unordered_set<ULong64_t>>();
+    BdtPredictionResult result;
 
     for (size_t entry = 0; entry < labels->size(); ++entry) {
         bool valid = true;
@@ -563,66 +517,510 @@ void evaluateDrellYanBdt(
 
         const bool predictedDy = dyScore >= decisionThreshold;
 
-        if      ( isDyProcess &&  predictedDy) ++truePositive;
-        else if (!isDyProcess && !predictedDy) ++trueNegative;
-        else if (!isDyProcess &&  predictedDy) ++falsePositive;
-        else                                    ++falseNegative;
+        if ( isDyProcess &&  predictedDy) ++result.truePositive;
+        else if (!isDyProcess && !predictedDy) ++result.trueNegative;
+        else if (!isDyProcess &&  predictedDy) ++result.falsePositive;
+        else ++result.falseNegative;
 
-        if (predictedDy) selectedIndices->insert(indices->at(entry));
+        if (predictedDy) result.selectedIndices->insert(indices->at(entry));
+        else result.rejectedIndices.push_back(indices->at(entry));
 
-        scoredEvents.emplace_back(dyScore, isDyProcess ? 1 : 0);
-        ++evaluatedEvents;
+        result.scoredEvents.emplace_back(dyScore, isDyProcess ? 1 : 0);
+        ++result.evaluatedEvents;
     }
 
     std::cout << "Event-by-event evaluation completed\n";
-    std::cout << "Evaluated events: " << evaluatedEvents << "\n";
-    std::cout << "Model-selected DY events: " << selectedIndices->size() << "\n";
-    std::cout << "TP=" << truePositive << " TN=" << trueNegative
-              << " FP=" << falsePositive << " FN=" << falseNegative << "\n";
+    return result;
+}
 
-    std::cout << "Calculating evaluation metrics\n";
+void SaveBdtHistogram(TH1D& histogram, const std::string& file, bool logY = false)
+{
+    std::cout << "Saving histogram: " << file << "\n";
 
-    const double total = truePositive + trueNegative + falsePositive + falseNegative;
-    const double accuracy = total > 0.0 ? (truePositive + trueNegative) / total : 0.0;
-    const double precision = truePositive + falsePositive > 0.0 ? truePositive / (truePositive + falsePositive) : 0.0;
-    const double recall = truePositive + falseNegative > 0.0 ? truePositive / (truePositive + falseNegative) : 0.0;
-    const double specificity = trueNegative + falsePositive > 0.0 ? trueNegative / (trueNegative + falsePositive) : 0.0;
+    TCanvas canvas(("canvas_" + std::string(histogram.GetName())).c_str(), "", 1000, 800);
+    canvas.SetLeftMargin(0.14);
+    canvas.SetBottomMargin(0.13);
+    canvas.SetTicks(1, 1);
+
+    if (logY) {
+        canvas.SetLogy();
+        histogram.SetMinimum(0.5);
+    }
+
+    histogram.SetStats(false);
+    histogram.SetLineWidth(2);
+    histogram.Draw("HIST");
+    canvas.SaveAs(file.c_str());
+
+    logValue("Evaluation histogram saved", file);
+}
+
+void CreateBdtPredictionHistograms(
+    ROOT::RDF::RNode histogramDf,
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& selectedIndices)
+{
+    logLine("");
+    logLine("--- CREATE HISTOGRAMS ---");
+
+    auto predictedDf = histogramDf
+        .Filter([selectedIndices](ULong64_t index) {
+            return selectedIndices->find(index) != selectedIndices->end();
+        }, {"Index"})
+        .Filter([](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+                   const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("EvaluationMuonKinematics",
+            [](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+               const ROOT::VecOps::RVec<float>& phi) {
+                int lead = -1, sub = -1;
+
+                for (size_t i = 0; i < pt.size(); ++i) {
+                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
+                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
+                }
+
+                return ROOT::VecOps::RVec<float>{
+                    pt[lead], eta[lead], phi[lead], pt[sub], eta[sub], phi[sub]
+                };
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("LeadingMuon_pt", "EvaluationMuonKinematics[0]")
+        .Define("LeadingMuon_eta", "EvaluationMuonKinematics[1]")
+        .Define("LeadingMuon_phi", "EvaluationMuonKinematics[2]")
+        .Define("SubleadingMuon_pt", "EvaluationMuonKinematics[3]")
+        .Define("SubleadingMuon_eta", "EvaluationMuonKinematics[4]")
+        .Define("SubleadingMuon_phi", "EvaluationMuonKinematics[5]")
+        .Define("EvaluationDimuonKinematics",
+            [](float pt1, float eta1, float phi1, float pt2, float eta2, float phi2) {
+                ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
+                ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
+                const auto d = a + b;
+
+                return ROOT::VecOps::RVec<float>{
+                    static_cast<float>(d.M()), static_cast<float>(d.Pt()),
+                    static_cast<float>(d.Rapidity()), static_cast<float>(d.Phi())
+                };
+            }, {"LeadingMuon_pt", "LeadingMuon_eta", "LeadingMuon_phi",
+                "SubleadingMuon_pt", "SubleadingMuon_eta", "SubleadingMuon_phi"})
+        .Define("Dimuon_mass", "EvaluationDimuonKinematics[0]")
+        .Define("Dimuon_pt", "EvaluationDimuonKinematics[1]")
+        .Define("Dimuon_rapidity", "EvaluationDimuonKinematics[2]")
+        .Define("Dimuon_phi", "EvaluationDimuonKinematics[3]");
+
+    auto histogramEventCount = predictedDf.Count();
+
+    auto hLeadingPt  = predictedDf.Histo1D({"bdt_LeadingMuon_pt", "BDT predicted DY;Leading muon p_{T} [GeV];Events", 100, 0, 140}, "LeadingMuon_pt");
+    auto hLeadingEta = predictedDf.Histo1D({"bdt_LeadingMuon_eta", "BDT predicted DY;Leading muon #eta;Events", 100, -2.4, 2.4}, "LeadingMuon_eta");
+    auto hLeadingPhi = predictedDf.Histo1D({"bdt_LeadingMuon_phi", "BDT predicted DY;Leading muon #phi [rad];Events", 100, -3.2, 3.2}, "LeadingMuon_phi");
+
+    auto hSubPt  = predictedDf.Histo1D({"bdt_SubleadingMuon_pt", "BDT predicted DY;Subleading muon p_{T} [GeV];Events", 100, 0, 140}, "SubleadingMuon_pt");
+    auto hSubEta = predictedDf.Histo1D({"bdt_SubleadingMuon_eta", "BDT predicted DY;Subleading muon #eta;Events", 100, -2.4, 2.4}, "SubleadingMuon_eta");
+    auto hSubPhi = predictedDf.Histo1D({"bdt_SubleadingMuon_phi", "BDT predicted DY;Subleading muon #phi [rad];Events", 100, -3.2, 3.2}, "SubleadingMuon_phi");
+
+    auto hMass = predictedDf.Histo1D({"bdt_Dimuon_mass", "BDT predicted DY;Dimuon mass [GeV];Events", 100, 50, 150}, "Dimuon_mass");
+    auto hPt   = predictedDf.Histo1D({"bdt_Dimuon_pt", "BDT predicted DY;Dimuon p_{T} [GeV];Events", 100, 0, 200}, "Dimuon_pt");
+    auto hRap  = predictedDf.Histo1D({"bdt_Dimuon_rapidity", "BDT predicted DY;Dimuon rapidity;Events", 100, -3, 3}, "Dimuon_rapidity");
+    auto hPhi  = predictedDf.Histo1D({"bdt_Dimuon_phi", "BDT predicted DY;Dimuon #phi [rad];Events", 100, -3.2, 3.2}, "Dimuon_phi");
+
+    std::vector<ROOT::RDF::RResultHandle> handles = {
+        histogramEventCount, hLeadingPt, hLeadingEta, hLeadingPhi,
+        hSubPt, hSubEta, hSubPhi, hMass, hPt, hRap, hPhi
+    };
+
+    ROOT::RDF::RunGraphs(handles);
+
+    std::cout << "Events used for histograms: " << *histogramEventCount << "\n";
+    logValue("Events used for histograms", *histogramEventCount);
+
+    gSystem->mkdir("Images", true);
+
+    SaveBdtHistogram(*hLeadingPt,  "Images/bdt_predicted_LeadingMuon_pt.png");
+    SaveBdtHistogram(*hLeadingEta, "Images/bdt_predicted_LeadingMuon_eta.png");
+    SaveBdtHistogram(*hLeadingPhi, "Images/bdt_predicted_LeadingMuon_phi.png");
+    SaveBdtHistogram(*hSubPt,      "Images/bdt_predicted_SubleadingMuon_pt.png");
+    SaveBdtHistogram(*hSubEta,     "Images/bdt_predicted_SubleadingMuon_eta.png");
+    SaveBdtHistogram(*hSubPhi,     "Images/bdt_predicted_SubleadingMuon_phi.png");
+    SaveBdtHistogram(*hMass,       "Images/bdt_predicted_Dimuon_mass.png");
+    SaveBdtHistogram(*hMass,       "Images/bdt_predicted_Dimuon_mass_log.png", true);
+    SaveBdtHistogram(*hPt,         "Images/bdt_predicted_Dimuon_pt.png");
+    SaveBdtHistogram(*hRap,        "Images/bdt_predicted_Dimuon_rapidity.png");
+    SaveBdtHistogram(*hPhi,        "Images/bdt_predicted_Dimuon_phi.png");
+}
+
+void CreateBdtDifferenceHistograms(
+    ROOT::RDF::RNode histogramDf,
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& selectedIndices)
+{
+    logLine("");
+    logLine("--- CREATE MODEL DIFFERENCE HISTOGRAMS ---");
+
+    auto modelDiffDf = histogramDf
+        .Filter([](bool isDy) { return isDy; }, {"IsDyProcess"})
+        .Filter([selectedIndices](ULong64_t index) {
+            return selectedIndices->find(index) == selectedIndices->end();
+        }, {"Index"})
+        .Filter([](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+                   const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("ModelDiffMuonKinematics",
+            [](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+               const ROOT::VecOps::RVec<float>& phi) {
+                int lead = -1, sub = -1;
+
+                for (size_t i = 0; i < pt.size(); ++i) {
+                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
+                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
+                }
+
+                return ROOT::VecOps::RVec<float>{
+                    pt[lead], eta[lead], phi[lead], pt[sub], eta[sub], phi[sub]
+                };
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("ModelDiff_LeadingMuon_pt", "ModelDiffMuonKinematics[0]")
+        .Define("ModelDiff_LeadingMuon_eta", "ModelDiffMuonKinematics[1]")
+        .Define("ModelDiff_LeadingMuon_phi", "ModelDiffMuonKinematics[2]")
+        .Define("ModelDiff_SubleadingMuon_pt", "ModelDiffMuonKinematics[3]")
+        .Define("ModelDiff_SubleadingMuon_eta", "ModelDiffMuonKinematics[4]")
+        .Define("ModelDiff_SubleadingMuon_phi", "ModelDiffMuonKinematics[5]")
+        .Define("ModelDiffDimuonKinematics",
+            [](float pt1, float eta1, float phi1, float pt2, float eta2, float phi2) {
+                ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
+                ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
+                const auto d = a + b;
+
+                return ROOT::VecOps::RVec<float>{
+                    static_cast<float>(d.M()), static_cast<float>(d.Pt()),
+                    static_cast<float>(d.Rapidity()), static_cast<float>(d.Phi())
+                };
+            }, {"ModelDiff_LeadingMuon_pt", "ModelDiff_LeadingMuon_eta", "ModelDiff_LeadingMuon_phi",
+                "ModelDiff_SubleadingMuon_pt", "ModelDiff_SubleadingMuon_eta", "ModelDiff_SubleadingMuon_phi"})
+        .Define("ModelDiff_Dimuon_mass", "ModelDiffDimuonKinematics[0]")
+        .Define("ModelDiff_Dimuon_pt", "ModelDiffDimuonKinematics[1]")
+        .Define("ModelDiff_Dimuon_rapidity", "ModelDiffDimuonKinematics[2]")
+        .Define("ModelDiff_Dimuon_phi", "ModelDiffDimuonKinematics[3]");
+
+    auto modelDiffCount = modelDiffDf.Count();
+
+    auto hLeadingPt  = modelDiffDf.Histo1D({"model_diff_LeadingMuon_pt", "Hard filter DY missed by BDT;Leading muon p_{T} [GeV];Events", 100, 0, 140}, "ModelDiff_LeadingMuon_pt");
+    auto hLeadingEta = modelDiffDf.Histo1D({"model_diff_LeadingMuon_eta", "Hard filter DY missed by BDT;Leading muon #eta;Events", 100, -2.4, 2.4}, "ModelDiff_LeadingMuon_eta");
+    auto hLeadingPhi = modelDiffDf.Histo1D({"model_diff_LeadingMuon_phi", "Hard filter DY missed by BDT;Leading muon #phi [rad];Events", 100, -3.2, 3.2}, "ModelDiff_LeadingMuon_phi");
+
+    auto hSubPt  = modelDiffDf.Histo1D({"model_diff_SubleadingMuon_pt", "Hard filter DY missed by BDT;Subleading muon p_{T} [GeV];Events", 100, 0, 140}, "ModelDiff_SubleadingMuon_pt");
+    auto hSubEta = modelDiffDf.Histo1D({"model_diff_SubleadingMuon_eta", "Hard filter DY missed by BDT;Subleading muon #eta;Events", 100, -2.4, 2.4}, "ModelDiff_SubleadingMuon_eta");
+    auto hSubPhi = modelDiffDf.Histo1D({"model_diff_SubleadingMuon_phi", "Hard filter DY missed by BDT;Subleading muon #phi [rad];Events", 100, -3.2, 3.2}, "ModelDiff_SubleadingMuon_phi");
+
+    auto hMass = modelDiffDf.Histo1D({"model_diff_Dimuon_mass", "Hard filter DY missed by BDT;Dimuon mass [GeV];Events", 100, 50, 150}, "ModelDiff_Dimuon_mass");
+    auto hPt   = modelDiffDf.Histo1D({"model_diff_Dimuon_pt", "Hard filter DY missed by BDT;Dimuon p_{T} [GeV];Events", 100, 0, 200}, "ModelDiff_Dimuon_pt");
+    auto hRap  = modelDiffDf.Histo1D({"model_diff_Dimuon_rapidity", "Hard filter DY missed by BDT;Dimuon rapidity;Events", 100, -3, 3}, "ModelDiff_Dimuon_rapidity");
+    auto hPhi  = modelDiffDf.Histo1D({"model_diff_Dimuon_phi", "Hard filter DY missed by BDT;Dimuon #phi [rad];Events", 100, -3.2, 3.2}, "ModelDiff_Dimuon_phi");
+
+    std::vector<ROOT::RDF::RResultHandle> handles = {
+        modelDiffCount, hLeadingPt, hLeadingEta, hLeadingPhi,
+        hSubPt, hSubEta, hSubPhi, hMass, hPt, hRap, hPhi
+    };
+
+    ROOT::RDF::RunGraphs(handles);
+
+    std::cout << "Hard-filter DY events missed by model: " << *modelDiffCount << "\n";
+    logValue("Hard-filter DY events missed by model", *modelDiffCount);
+
+    SaveBdtHistogram(*hLeadingPt,  "Images/model_diff_LeadingMuon_pt.png");
+    SaveBdtHistogram(*hLeadingEta, "Images/model_diff_LeadingMuon_eta.png");
+    SaveBdtHistogram(*hLeadingPhi, "Images/model_diff_LeadingMuon_phi.png");
+    SaveBdtHistogram(*hSubPt,      "Images/model_diff_SubleadingMuon_pt.png");
+    SaveBdtHistogram(*hSubEta,     "Images/model_diff_SubleadingMuon_eta.png");
+    SaveBdtHistogram(*hSubPhi,     "Images/model_diff_SubleadingMuon_phi.png");
+    SaveBdtHistogram(*hMass,       "Images/model_diff_Dimuon_mass.png");
+    SaveBdtHistogram(*hPt,         "Images/model_diff_Dimuon_pt.png");
+    SaveBdtHistogram(*hRap,        "Images/model_diff_Dimuon_rapidity.png");
+    SaveBdtHistogram(*hPhi,        "Images/model_diff_Dimuon_phi.png");
+}
+
+void CreateBdtFalseHistograms(
+    ROOT::RDF::RNode evaluationDf, std::vector<ULong64_t> rejectedIndices,
+    double trueNegative, double falseNegative, double falseHistogramUsagePercentage, unsigned randomSeed)
+{
+    const size_t falseSampleSize = static_cast<size_t>(
+        std::llround((falseHistogramUsagePercentage / 100.0) * rejectedIndices.size()));
+
+    std::sort(rejectedIndices.begin(), rejectedIndices.end());
+
+    std::mt19937 falseGenerator(randomSeed);
+    std::shuffle(rejectedIndices.begin(), rejectedIndices.end(), falseGenerator);
+    rejectedIndices.resize(falseSampleSize);
+
+    auto falseIndices = std::make_shared<std::unordered_set<ULong64_t>>(
+        rejectedIndices.begin(), rejectedIndices.end());
+
+    logLine("");
+    logLine("--- CREATE MODEL FALSE HISTOGRAMS ---");
+    logValue("Non-DY histogram usage [%]", falseHistogramUsagePercentage);
+    logValue("Evaluated non-DY predictions", trueNegative + falseNegative);
+    logValue("Sampled non-DY predictions before muon requirements", falseSampleSize);
+
+    auto modelFalseDf = evaluationDf
+        .Filter([falseIndices](ULong64_t index) {
+            return falseIndices->find(index) != falseIndices->end();
+        }, {"Index"})
+        .Filter([](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+                   const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("ModelFalseMuonKinematics",
+            [](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+               const ROOT::VecOps::RVec<float>& phi) {
+                int lead = -1, sub = -1;
+
+                for (size_t i = 0; i < pt.size(); ++i) {
+                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
+                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
+                }
+
+                return ROOT::VecOps::RVec<float>{
+                    pt[lead], eta[lead], phi[lead], pt[sub], eta[sub], phi[sub]
+                };
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("ModelFalse_LeadingMuon_pt", "ModelFalseMuonKinematics[0]")
+        .Define("ModelFalse_LeadingMuon_eta", "ModelFalseMuonKinematics[1]")
+        .Define("ModelFalse_LeadingMuon_phi", "ModelFalseMuonKinematics[2]")
+        .Define("ModelFalse_SubleadingMuon_pt", "ModelFalseMuonKinematics[3]")
+        .Define("ModelFalse_SubleadingMuon_eta", "ModelFalseMuonKinematics[4]")
+        .Define("ModelFalse_SubleadingMuon_phi", "ModelFalseMuonKinematics[5]")
+        .Define("ModelFalseDimuonKinematics",
+            [](float pt1, float eta1, float phi1, float pt2, float eta2, float phi2) {
+                ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
+                ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
+                const auto d = a + b;
+
+                return ROOT::VecOps::RVec<float>{
+                    static_cast<float>(d.M()), static_cast<float>(d.Pt()),
+                    static_cast<float>(d.Rapidity()), static_cast<float>(d.Phi())
+                };
+            }, {"ModelFalse_LeadingMuon_pt", "ModelFalse_LeadingMuon_eta", "ModelFalse_LeadingMuon_phi",
+                "ModelFalse_SubleadingMuon_pt", "ModelFalse_SubleadingMuon_eta", "ModelFalse_SubleadingMuon_phi"})
+        .Define("ModelFalse_Dimuon_mass", "ModelFalseDimuonKinematics[0]")
+        .Define("ModelFalse_Dimuon_pt", "ModelFalseDimuonKinematics[1]")
+        .Define("ModelFalse_Dimuon_rapidity", "ModelFalseDimuonKinematics[2]")
+        .Define("ModelFalse_Dimuon_phi", "ModelFalseDimuonKinematics[3]");
+
+    auto modelFalseCount = modelFalseDf.Count();
+
+    auto hLeadingPt  = modelFalseDf.Histo1D({"model_false_LeadingMuon_pt", "BDT predicted non-DY;Leading muon p_{T} [GeV];Events", 100, 0, 140}, "ModelFalse_LeadingMuon_pt");
+    auto hLeadingEta = modelFalseDf.Histo1D({"model_false_LeadingMuon_eta", "BDT predicted non-DY;Leading muon #eta;Events", 100, -2.4, 2.4}, "ModelFalse_LeadingMuon_eta");
+    auto hLeadingPhi = modelFalseDf.Histo1D({"model_false_LeadingMuon_phi", "BDT predicted non-DY;Leading muon #phi [rad];Events", 100, -3.2, 3.2}, "ModelFalse_LeadingMuon_phi");
+
+    auto hSubPt  = modelFalseDf.Histo1D({"model_false_SubleadingMuon_pt", "BDT predicted non-DY;Subleading muon p_{T} [GeV];Events", 100, 0, 140}, "ModelFalse_SubleadingMuon_pt");
+    auto hSubEta = modelFalseDf.Histo1D({"model_false_SubleadingMuon_eta", "BDT predicted non-DY;Subleading muon #eta;Events", 100, -2.4, 2.4}, "ModelFalse_SubleadingMuon_eta");
+    auto hSubPhi = modelFalseDf.Histo1D({"model_false_SubleadingMuon_phi", "BDT predicted non-DY;Subleading muon #phi [rad];Events", 100, -3.2, 3.2}, "ModelFalse_SubleadingMuon_phi");
+
+    auto hMass = modelFalseDf.Histo1D({"model_false_Dimuon_mass", "BDT predicted non-DY;Dimuon mass [GeV];Events", 100, 50, 150}, "ModelFalse_Dimuon_mass");
+    auto hPt   = modelFalseDf.Histo1D({"model_false_Dimuon_pt", "BDT predicted non-DY;Dimuon p_{T} [GeV];Events", 100, 0, 200}, "ModelFalse_Dimuon_pt");
+    auto hRap  = modelFalseDf.Histo1D({"model_false_Dimuon_rapidity", "BDT predicted non-DY;Dimuon rapidity;Events", 100, -3, 3}, "ModelFalse_Dimuon_rapidity");
+    auto hPhi  = modelFalseDf.Histo1D({"model_false_Dimuon_phi", "BDT predicted non-DY;Dimuon #phi [rad];Events", 100, -3.2, 3.2}, "ModelFalse_Dimuon_phi");
+
+    std::vector<ROOT::RDF::RResultHandle> handles = {
+        modelFalseCount, hLeadingPt, hLeadingEta, hLeadingPhi,
+        hSubPt, hSubEta, hSubPhi, hMass, hPt, hRap, hPhi
+    };
+
+    ROOT::RDF::RunGraphs(handles);
+
+    std::cout << "Sampled non-DY events with at least two muons: " << *modelFalseCount << "\n";
+    logValue("Sampled non-DY events with at least two muons", *modelFalseCount);
+
+    SaveBdtHistogram(*hLeadingPt,  "Images/model_false_LeadingMuon_pt.png");
+    SaveBdtHistogram(*hLeadingEta, "Images/model_false_LeadingMuon_eta.png");
+    SaveBdtHistogram(*hLeadingPhi, "Images/model_false_LeadingMuon_phi.png");
+    SaveBdtHistogram(*hSubPt,      "Images/model_false_SubleadingMuon_pt.png");
+    SaveBdtHistogram(*hSubEta,     "Images/model_false_SubleadingMuon_eta.png");
+    SaveBdtHistogram(*hSubPhi,     "Images/model_false_SubleadingMuon_phi.png");
+    SaveBdtHistogram(*hMass,       "Images/model_false_Dimuon_mass.png");
+    SaveBdtHistogram(*hPt,         "Images/model_false_Dimuon_pt.png");
+    SaveBdtHistogram(*hRap,        "Images/model_false_Dimuon_rapidity.png");
+    SaveBdtHistogram(*hPhi,        "Images/model_false_Dimuon_phi.png");
+}
+
+void CreateEvaluationDataHistograms(ROOT::RDF::RNode testingDf)
+{
+    ROOT::RDF::RNode unfilteredDf = testingDf
+        .Filter([](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+                   const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("UnfilteredKinematics",
+            [](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+               const ROOT::VecOps::RVec<float>& phi) {
+                size_t lead = 0, sub = 1;
+
+                if (pt[sub] > pt[lead]) std::swap(lead, sub);
+
+                for (size_t i = 2; i < pt.size(); ++i) {
+                    if (pt[i] > pt[lead]) { sub = lead; lead = i; }
+                    else if (pt[i] > pt[sub]) sub = i;
+                }
+
+                ROOT::Math::PtEtaPhiMVector a(pt[lead], eta[lead], phi[lead], 0.105658);
+                ROOT::Math::PtEtaPhiMVector b(pt[sub], eta[sub], phi[sub], 0.105658);
+                const auto d = a + b;
+
+                return ROOT::VecOps::RVec<float>{
+                    pt[lead], eta[lead], phi[lead], pt[sub], eta[sub], phi[sub],
+                    static_cast<float>(d.M()), static_cast<float>(d.Pt()),
+                    static_cast<float>(d.Rapidity()), static_cast<float>(d.Phi())
+                };
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"});
+
+    struct InputHistogram {
+        const char* name;
+        const char* axis;
+        double minimum, maximum;
+    };
+
+    const InputHistogram inputHistograms[] = {
+        {"LeadingMuon_pt",     "Leading muon p_{T} [GeV]",     0, 140},
+        {"LeadingMuon_eta",    "Leading muon #eta",         -2.4, 2.4},
+        {"LeadingMuon_phi",    "Leading muon #phi [rad]",   -3.2, 3.2},
+        {"SubleadingMuon_pt",  "Subleading muon p_{T} [GeV]",  0, 140},
+        {"SubleadingMuon_eta", "Subleading muon #eta",      -2.4, 2.4},
+        {"SubleadingMuon_phi", "Subleading muon #phi [rad]",-3.2, 3.2},
+        {"Dimuon_mass",        "Dimuon mass [GeV]",            50, 150},
+        {"Dimuon_pt",          "Dimuon p_{T} [GeV]",            0, 200},
+        {"Dimuon_rapidity",    "Dimuon rapidity",              -3, 3},
+        {"Dimuon_phi",         "Dimuon #phi [rad]",          -3.2, 3.2}
+    };
+
+    auto inputCount = testingDf.Count();
+    auto inputHistogramCount = unfilteredDf.Count();
+
+    std::vector<ROOT::RDF::RResultPtr<TH1D>> inputHists;
+    std::vector<ROOT::RDF::RResultHandle> handles{inputCount, inputHistogramCount};
+
+    for (size_t i = 0; i < 10; ++i) {
+        const auto& spec = inputHistograms[i];
+        const std::string name = "unfiltered_" + std::string(spec.name);
+        const std::string title = "Input before model selection;" + std::string(spec.axis) + ";Events";
+
+        unfilteredDf = unfilteredDf.Define(name, "UnfilteredKinematics[" + std::to_string(i) + "]");
+
+        inputHists.emplace_back(
+            unfilteredDf.Histo1D({name.c_str(), title.c_str(), 100, spec.minimum, spec.maximum}, name));
+
+        handles.emplace_back(inputHists.back());
+    }
+
+    ROOT::RDF::RunGraphs(handles);
+
+    std::cout << "Events passed into evaluation: " << *inputCount << '\n';
+    std::cout << "Input events with at least two muons: " << *inputHistogramCount << '\n';
+
+    logValue("Events passed into evaluation", *inputCount);
+    logValue("Input events with at least two muons", *inputHistogramCount);
+
+    gSystem->mkdir("Images", true);
+
+    for (size_t i = 0; i < inputHists.size(); ++i)
+        SaveBdtHistogram(*inputHists[i], "Images/unfiltered_" + std::string(inputHistograms[i].name) + ".png");
+
+    SaveBdtHistogram(*inputHists[6], "Images/unfiltered_Dimuon_mass_log.png", true);
+}
+
+void evaluateDrellYanBdt(
+    const std::vector<std::string>& features,
+    ROOT::RDF::RNode testingDf,
+    const std::string& weightsFile,
+    const std::string& methodName,
+    double decisionThreshold,
+    double evaluationUsagePercentage,
+    double histogramUsagePercentage,
+    double falseHistogramUsagePercentage,
+    unsigned randomSeed)
+{
+    std::cout << "evaluateDrellYanBdt Start\n";
+    std::cout << "Features: " << features.size() << "\n";
+    std::cout << "Weights file: " << weightsFile << "\n";
+    std::cout << "Method: " << methodName << "\n";
+    std::cout << "Decision threshold: " << decisionThreshold << "\n";
+    std::cout << "Evaluation usage: " << evaluationUsagePercentage << "%\n";
+    std::cout << "Histogram usage: " << histogramUsagePercentage << "%\n";
+
+    if (evaluationUsagePercentage <= 0.0 || evaluationUsagePercentage > 100.0)
+        throw std::runtime_error("Evaluation usage percentage must be in (0, 100]");
+
+    if (histogramUsagePercentage <= 0.0 || histogramUsagePercentage > 100.0)
+        throw std::runtime_error("Histogram usage percentage must be in (0, 100]");
+
+    if (falseHistogramUsagePercentage < 0.0 || falseHistogramUsagePercentage > 100.0)
+        throw std::runtime_error("Non-DY histogram usage percentage must be in [0, 100]");
+
+
+    auto testingCount = testingDf.Count();
+    auto testingDyCount = testingDf.Filter([](bool isDy) { return isDy; }, {"IsDyProcess"}).Count();
+
+    std::vector<ROOT::RDF::RResultHandle> countHandles = {testingCount, testingDyCount};
+    ROOT::RDF::RunGraphs(countHandles);
+
+    const double dyPercentage = *testingCount > 0 ? 100.0 * static_cast<double>(*testingDyCount) / static_cast<double>(*testingCount) : 0.0;
+
+    std::cout << "Testing dataframe events: " << *testingCount << "\n";
+    std::cout << "Testing dataframe DY events: " << *testingDyCount << "\n";
+    std::cout << "DY events in testing dataframe: " << dyPercentage << "%\n";
+
+    logValue("Testing dataframe events", *testingCount);
+    logValue("Testing dataframe DY events", *testingDyCount);
+    logValue("Testing dataframe DY [%]", dyPercentage);
+
+
+    const ULong64_t keepThreshold =
+        static_cast<ULong64_t>(std::llround(evaluationUsagePercentage * 100.0));
+
+    auto evaluationDf = testingDf.Filter(
+        [keepThreshold, randomSeed](ULong64_t index) {
+            return (index * 7919ULL + randomSeed) % 10000ULL < keepThreshold;
+        }, {"Index"});
+
+    for (const auto& feature : features)
+        if (!evaluationDf.HasColumn(feature))
+            throw std::runtime_error("Missing testing feature: " + feature);
+
+    if (!evaluationDf.HasColumn("IsDyProcess"))
+        throw std::runtime_error("Testing dataframe is missing IsDyProcess");
+
+    BdtPredictionResult prediction = RunDrellYanBdtPrediction(features, evaluationDf, weightsFile, methodName, decisionThreshold);
+
+    std::cout << "Evaluated events: " << prediction.evaluatedEvents << "\n";
+    std::cout << "Model-selected DY events: " << prediction.selectedIndices->size() << "\n";
+    std::cout << "TP=" << prediction.truePositive << " TN=" << prediction.trueNegative << " FP=" << prediction.falsePositive << " FN=" << prediction.falseNegative << "\n";
+
+    const double total = prediction.truePositive + prediction.trueNegative + prediction.falsePositive + prediction.falseNegative;
+    const double accuracy = total > 0.0 ? (prediction.truePositive + prediction.trueNegative) / total : 0.0;
+    const double precision = prediction.truePositive + prediction.falsePositive > 0.0 ? prediction.truePositive / (prediction.truePositive + prediction.falsePositive) : 0.0;
+    const double recall = prediction.truePositive + prediction.falseNegative > 0.0 ? prediction.truePositive / (prediction.truePositive + prediction.falseNegative) : 0.0;
+    const double specificity = prediction.trueNegative + prediction.falsePositive > 0.0 ? prediction.trueNegative / (prediction.trueNegative + prediction.falsePositive) : 0.0;
     const double f1 = precision + recall > 0.0 ? 2.0 * precision * recall / (precision + recall) : 0.0;
-    const double significance = truePositive + falsePositive > 0.0 ? truePositive / std::sqrt(truePositive + falsePositive) : 0.0;
+    const double significance = prediction.truePositive + prediction.falsePositive > 0.0 ? prediction.truePositive / std::sqrt(prediction.truePositive + prediction.falsePositive) : 0.0;
 
-    std::cout << "Accuracy: " << accuracy << "\n";
-    std::cout << "Precision: " << precision << "\n";
-    std::cout << "Recall: " << recall << "\n";
-    std::cout << "Background rejection: " << specificity << "\n";
-    std::cout << "F1: " << f1 << "\n";
-    std::cout << "S/sqrt(S+B): " << significance << "\n";
-    std::cout << "Sorting model scores for ROC AUC\n";
-
-    std::sort(scoredEvents.begin(), scoredEvents.end(),
+    std::sort(prediction.scoredEvents.begin(), prediction.scoredEvents.end(),
         [](const auto& a, const auto& b) { return a.first > b.first; });
 
     double totalSignal = 0.0, totalBackground = 0.0;
 
-    for (const auto& event : scoredEvents)
+    for (const auto& event : prediction.scoredEvents)
         event.second ? ++totalSignal : ++totalBackground;
-
-    std::cout << "ROC events - signal: " << totalSignal
-              << ", background: " << totalBackground << "\n";
 
     double auc = std::numeric_limits<double>::quiet_NaN();
 
     if (totalSignal > 0.0 && totalBackground > 0.0) {
-        std::cout << "Calculating ROC AUC\n";
-
         double cumulativeSignal = 0.0, cumulativeBackground = 0.0;
         double previousTpr = 0.0, previousFpr = 0.0, area = 0.0;
 
-        for (size_t i = 0; i < scoredEvents.size();) {
+        for (size_t i = 0; i < prediction.scoredEvents.size();) {
             size_t j = i;
             double groupSignal = 0.0, groupBackground = 0.0;
 
-            while (j < scoredEvents.size() && scoredEvents[j].first == scoredEvents[i].first) {
-                scoredEvents[j].second ? ++groupSignal : ++groupBackground;
+            while (j < prediction.scoredEvents.size() &&
+                   prediction.scoredEvents[j].first == prediction.scoredEvents[i].first) {
+                prediction.scoredEvents[j].second ? ++groupSignal : ++groupBackground;
                 ++j;
             }
 
@@ -641,19 +1039,23 @@ void evaluateDrellYanBdt(
         auc = area;
     }
 
-    std::cout << "Calculated parameters\n";
+    std::cout << "Accuracy: " << accuracy << "\n";
+    std::cout << "Precision: " << precision << "\n";
+    std::cout << "Recall: " << recall << "\n";
+    std::cout << "Background rejection: " << specificity << "\n";
+    std::cout << "F1: " << f1 << "\n";
     std::cout << "ROC AUC: " << auc << "\n";
-    std::cout << "Writing evaluation metrics to log\n";
+    std::cout << "S/sqrt(S+B): " << significance << "\n";
 
     logLine("");
     logLine("--- BDT evaluation ---");
-    logValue("Evaluated events", evaluatedEvents);
-    logValue("Model selected events", selectedIndices->size());
+    logValue("Evaluated events", prediction.evaluatedEvents);
+    logValue("Model selected events", prediction.selectedIndices->size());
     logValue("Decision threshold", decisionThreshold);
-    logValue("True positives", truePositive);
-    logValue("True negatives", trueNegative);
-    logValue("False positives", falsePositive);
-    logValue("False negatives", falseNegative);
+    logValue("True positives", prediction.truePositive);
+    logValue("True negatives", prediction.trueNegative);
+    logValue("False positives", prediction.falsePositive);
+    logValue("False negatives", prediction.falseNegative);
     logValue("Accuracy", accuracy);
     logValue("PRECISION", precision);
     logValue("Recall", recall);
@@ -662,283 +1064,20 @@ void evaluateDrellYanBdt(
     logValue("ROC AUC", auc);
     logValue("S/sqrt(S+B)", significance);
 
-
-
-
-    // HISTOGRAMS //
-    logLine("");
-    logLine("--- CREATE HISTOGRAMS ---");
-
-    std::cout << "Histogram creation START\n";
-
     const ULong64_t histogramKeepThreshold =
         static_cast<ULong64_t>(std::llround(histogramUsagePercentage * 100.0));
-
-    std::cout << "Histogram keep threshold: " << histogramKeepThreshold << "/10000\n";
-    std::cout << "Applying histogram dataset percentage filter\n";
 
     auto histogramDf = evaluationDf.Filter(
         [histogramKeepThreshold, randomSeed](ULong64_t index) {
             return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
         }, {"Index"});
 
-    std::cout << "Creating dataframe containing model-selected events\n";
-
-    auto predictedDf = histogramDf
-        .Filter([selectedIndices](ULong64_t index) {
-            return selectedIndices->find(index) != selectedIndices->end();
-        }, {"Index"})
-        .Filter([](const ROOT::VecOps::RVec<float>& pt,
-                   const ROOT::VecOps::RVec<float>& eta,
-                   const ROOT::VecOps::RVec<float>& phi) {
-            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
-        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
-        .Define("EvaluationMuonKinematics",
-            [](const ROOT::VecOps::RVec<float>& pt,
-               const ROOT::VecOps::RVec<float>& eta,
-               const ROOT::VecOps::RVec<float>& phi) {
-                int lead = -1, sub = -1;
-
-                for (size_t i = 0; i < pt.size(); ++i) {
-                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
-                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
-                }
-
-                return ROOT::VecOps::RVec<float>{
-                    pt[lead], eta[lead], phi[lead],
-                    pt[sub], eta[sub], phi[sub]
-                };
-            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
-        .Define("LeadingMuon_pt",  "EvaluationMuonKinematics[0]")
-        .Define("LeadingMuon_eta", "EvaluationMuonKinematics[1]")
-        .Define("LeadingMuon_phi", "EvaluationMuonKinematics[2]")
-        .Define("SubleadingMuon_pt",  "EvaluationMuonKinematics[3]")
-        .Define("SubleadingMuon_eta", "EvaluationMuonKinematics[4]")
-        .Define("SubleadingMuon_phi", "EvaluationMuonKinematics[5]")
-        .Define("EvaluationDimuonKinematics",
-            [](float pt1, float eta1, float phi1,
-               float pt2, float eta2, float phi2) {
-                ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
-                ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
-                const auto d = a + b;
-
-                return ROOT::VecOps::RVec<float>{
-                    (float)d.M(), (float)d.Pt(), (float)d.Rapidity(), (float)d.Phi()
-                };
-            }, {"LeadingMuon_pt", "LeadingMuon_eta", "LeadingMuon_phi",
-                "SubleadingMuon_pt", "SubleadingMuon_eta", "SubleadingMuon_phi"})
-        .Define("Dimuon_mass",     "EvaluationDimuonKinematics[0]")
-        .Define("Dimuon_pt",       "EvaluationDimuonKinematics[1]")
-        .Define("Dimuon_rapidity", "EvaluationDimuonKinematics[2]")
-        .Define("Dimuon_phi",      "EvaluationDimuonKinematics[3]");
-
-    std::cout << "Predicted DY histogram dataframe prepared\n";
-    std::cout << "Creating histogram actions\n";
-
-    auto histogramEventCount = predictedDf.Count();
-
-    auto hLeadingPt  = predictedDf.Histo1D({"bdt_LeadingMuon_pt",  "BDT predicted DY;Leading muon p_{T} [GeV];Events", 100, 0, 140}, "LeadingMuon_pt");
-    auto hLeadingEta = predictedDf.Histo1D({"bdt_LeadingMuon_eta", "BDT predicted DY;Leading muon #eta;Events", 100, -2.4, 2.4}, "LeadingMuon_eta");
-    auto hLeadingPhi = predictedDf.Histo1D({"bdt_LeadingMuon_phi", "BDT predicted DY;Leading muon #phi [rad];Events", 100, -3.2, 3.2}, "LeadingMuon_phi");
-
-    auto hSubPt  = predictedDf.Histo1D({"bdt_SubleadingMuon_pt",  "BDT predicted DY;Subleading muon p_{T} [GeV];Events", 100, 0, 140}, "SubleadingMuon_pt");
-    auto hSubEta = predictedDf.Histo1D({"bdt_SubleadingMuon_eta", "BDT predicted DY;Subleading muon #eta;Events", 100, -2.4, 2.4}, "SubleadingMuon_eta");
-    auto hSubPhi = predictedDf.Histo1D({"bdt_SubleadingMuon_phi", "BDT predicted DY;Subleading muon #phi [rad];Events", 100, -3.2, 3.2}, "SubleadingMuon_phi");
-
-    auto hMass = predictedDf.Histo1D({"bdt_Dimuon_mass", "BDT predicted DY;Dimuon mass [GeV];Events", 100, 50, 150}, "Dimuon_mass");
-    auto hPt   = predictedDf.Histo1D({"bdt_Dimuon_pt", "BDT predicted DY;Dimuon p_{T} [GeV];Events", 100, 0, 200}, "Dimuon_pt");
-    auto hRap  = predictedDf.Histo1D({"bdt_Dimuon_rapidity", "BDT predicted DY;Dimuon rapidity;Events", 100, -3, 3}, "Dimuon_rapidity");
-    auto hPhi  = predictedDf.Histo1D({"bdt_Dimuon_phi", "BDT predicted DY;Dimuon #phi [rad];Events", 100, -3.2, 3.2}, "Dimuon_phi");
-
-    std::vector<ROOT::RDF::RResultHandle> histogramHandles = {
-        histogramEventCount,
-        hLeadingPt, hLeadingEta, hLeadingPhi,
-        hSubPt, hSubEta, hSubPhi,
-        hMass, hPt, hRap, hPhi
-    };
-
-    std::cout << "Prepared " << histogramHandles.size() << " histogram actions\n";
-    std::cout << "Executing histogram RDataFrame graphs\n";
-
-    ROOT::RDF::RunGraphs(histogramHandles);
-
-    std::cout << "Histogram RDataFrame graphs completed\n";
-    std::cout << "Events used for histograms: " << *histogramEventCount << "\n";
-
-    logValue("Events used for histograms", *histogramEventCount);
-
-    std::cout << "Creating Images directory\n";
-    gSystem->mkdir("Images", true);
-
-    auto save = [](auto& hist, const std::string& file, bool logY = false) {
-        std::cout << "Saving histogram: " << file << "\n";
-
-        TCanvas canvas(("canvas_" + std::string(hist->GetName())).c_str(), "", 1000, 800);
-        canvas.SetLeftMargin(0.14);
-        canvas.SetBottomMargin(0.13);
-        canvas.SetTicks(1, 1);
-
-        if (logY) {
-            canvas.SetLogy();
-            hist->SetMinimum(0.5);
-        }
-
-        hist->SetStats(false);
-        hist->SetLineWidth(2);
-        hist->Draw("HIST");
-
-        canvas.SaveAs(file.c_str());
-        logValue("Evaluation histogram saved", file);
-    };
-
-    std::cout << "Saving evaluation histograms\n";
-
-    save(hLeadingPt,  "Images/bdt_predicted_LeadingMuon_pt.png");
-    save(hLeadingEta, "Images/bdt_predicted_LeadingMuon_eta.png");
-    save(hLeadingPhi, "Images/bdt_predicted_LeadingMuon_phi.png");
-    save(hSubPt,      "Images/bdt_predicted_SubleadingMuon_pt.png");
-    save(hSubEta,     "Images/bdt_predicted_SubleadingMuon_eta.png");
-    save(hSubPhi,     "Images/bdt_predicted_SubleadingMuon_phi.png");
-    save(hMass,       "Images/bdt_predicted_Dimuon_mass.png");
-    save(hMass,       "Images/bdt_predicted_Dimuon_mass_log.png", true);
-    save(hPt,         "Images/bdt_predicted_Dimuon_pt.png");
-    save(hRap,        "Images/bdt_predicted_Dimuon_rapidity.png");
-    save(hPhi,        "Images/bdt_predicted_Dimuon_phi.png");
-
-    std::cout << "All evaluation histograms saved\n";
-    std::cout << "Histogram creation END\n";
-
-    
-    logLine("");
-    logLine("--- CREATE MODEL DIFFERENCE HISTOGRAMS ---");
-
-    auto modelDiffDf = histogramDf
-        .Filter([](bool isDy) { return isDy; }, {"IsDyProcess"})
-        .Filter([selectedIndices](ULong64_t index) {
-            return selectedIndices->find(index) == selectedIndices->end();
-        }, {"Index"})
-        .Filter([](const ROOT::VecOps::RVec<float>& pt,
-                const ROOT::VecOps::RVec<float>& eta,
-                const ROOT::VecOps::RVec<float>& phi) {
-            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
-        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
-        .Define("ModelDiffMuonKinematics",
-            [](const ROOT::VecOps::RVec<float>& pt,
-            const ROOT::VecOps::RVec<float>& eta,
-            const ROOT::VecOps::RVec<float>& phi) {
-                int lead = -1, sub = -1;
-                for (size_t i = 0; i < pt.size(); ++i) {
-                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
-                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
-                }
-                return ROOT::VecOps::RVec<float>{
-                    pt[lead], eta[lead], phi[lead],
-                    pt[sub], eta[sub], phi[sub]
-                };
-            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
-        .Define("ModelDiff_LeadingMuon_pt",  "ModelDiffMuonKinematics[0]")
-        .Define("ModelDiff_LeadingMuon_eta", "ModelDiffMuonKinematics[1]")
-        .Define("ModelDiff_LeadingMuon_phi", "ModelDiffMuonKinematics[2]")
-        .Define("ModelDiff_SubleadingMuon_pt",  "ModelDiffMuonKinematics[3]")
-        .Define("ModelDiff_SubleadingMuon_eta", "ModelDiffMuonKinematics[4]")
-        .Define("ModelDiff_SubleadingMuon_phi", "ModelDiffMuonKinematics[5]")
-        .Define("ModelDiffDimuonKinematics",
-            [](float pt1, float eta1, float phi1,
-            float pt2, float eta2, float phi2) {
-                ROOT::Math::PtEtaPhiMVector a(pt1, eta1, phi1, 0.105658);
-                ROOT::Math::PtEtaPhiMVector b(pt2, eta2, phi2, 0.105658);
-                const auto d = a + b;
-                return ROOT::VecOps::RVec<float>{
-                    (float)d.M(), (float)d.Pt(),
-                    (float)d.Rapidity(), (float)d.Phi()
-                };
-            }, {
-                "ModelDiff_LeadingMuon_pt",
-                "ModelDiff_LeadingMuon_eta",
-                "ModelDiff_LeadingMuon_phi",
-                "ModelDiff_SubleadingMuon_pt",
-                "ModelDiff_SubleadingMuon_eta",
-                "ModelDiff_SubleadingMuon_phi"
-            })
-        .Define("ModelDiff_Dimuon_mass",     "ModelDiffDimuonKinematics[0]")
-        .Define("ModelDiff_Dimuon_pt",       "ModelDiffDimuonKinematics[1]")
-        .Define("ModelDiff_Dimuon_rapidity", "ModelDiffDimuonKinematics[2]")
-        .Define("ModelDiff_Dimuon_phi",      "ModelDiffDimuonKinematics[3]");
-
-    auto modelDiffCount = modelDiffDf.Count();
-
-    auto hDiffLeadingPt = modelDiffDf.Histo1D(
-        {"model_diff_LeadingMuon_pt", "Hard filter DY missed by BDT;Leading muon p_{T} [GeV];Events", 100, 0, 140},
-        "ModelDiff_LeadingMuon_pt");
-
-    auto hDiffLeadingEta = modelDiffDf.Histo1D(
-        {"model_diff_LeadingMuon_eta", "Hard filter DY missed by BDT;Leading muon #eta;Events", 100, -2.4, 2.4},
-        "ModelDiff_LeadingMuon_eta");
-
-    auto hDiffLeadingPhi = modelDiffDf.Histo1D(
-        {"model_diff_LeadingMuon_phi", "Hard filter DY missed by BDT;Leading muon #phi [rad];Events", 100, -3.2, 3.2},
-        "ModelDiff_LeadingMuon_phi");
-
-    auto hDiffSubPt = modelDiffDf.Histo1D(
-        {"model_diff_SubleadingMuon_pt", "Hard filter DY missed by BDT;Subleading muon p_{T} [GeV];Events", 100, 0, 140},
-        "ModelDiff_SubleadingMuon_pt");
-
-    auto hDiffSubEta = modelDiffDf.Histo1D(
-        {"model_diff_SubleadingMuon_eta", "Hard filter DY missed by BDT;Subleading muon #eta;Events", 100, -2.4, 2.4},
-        "ModelDiff_SubleadingMuon_eta");
-
-    auto hDiffSubPhi = modelDiffDf.Histo1D(
-        {"model_diff_SubleadingMuon_phi", "Hard filter DY missed by BDT;Subleading muon #phi [rad];Events", 100, -3.2, 3.2},
-        "ModelDiff_SubleadingMuon_phi");
-
-    auto hDiffMass = modelDiffDf.Histo1D(
-        {"model_diff_Dimuon_mass", "Hard filter DY missed by BDT;Dimuon mass [GeV];Events", 100, 50, 150},
-        "ModelDiff_Dimuon_mass");
-
-    auto hDiffPt = modelDiffDf.Histo1D(
-        {"model_diff_Dimuon_pt", "Hard filter DY missed by BDT;Dimuon p_{T} [GeV];Events", 100, 0, 200},
-        "ModelDiff_Dimuon_pt");
-
-    auto hDiffRap = modelDiffDf.Histo1D(
-        {"model_diff_Dimuon_rapidity", "Hard filter DY missed by BDT;Dimuon rapidity;Events", 100, -3, 3},
-        "ModelDiff_Dimuon_rapidity");
-
-    auto hDiffPhi = modelDiffDf.Histo1D(
-        {"model_diff_Dimuon_phi", "Hard filter DY missed by BDT;Dimuon #phi [rad];Events", 100, -3.2, 3.2},
-        "ModelDiff_Dimuon_phi");
-
-    std::vector<ROOT::RDF::RResultHandle> modelDiffHandles = {
-        modelDiffCount,
-        hDiffLeadingPt, hDiffLeadingEta, hDiffLeadingPhi,
-        hDiffSubPt, hDiffSubEta, hDiffSubPhi,
-        hDiffMass, hDiffPt, hDiffRap, hDiffPhi
-    };
-
-    ROOT::RDF::RunGraphs(modelDiffHandles);
-
-    std::cout << "Hard-filter DY events missed by model: "
-            << *modelDiffCount << "\n";
-
-    logValue("Hard-filter DY events missed by model", *modelDiffCount);
-
-    save(hDiffLeadingPt,  "Images/model_diff_LeadingMuon_pt.png");
-    save(hDiffLeadingEta, "Images/model_diff_LeadingMuon_eta.png");
-    save(hDiffLeadingPhi, "Images/model_diff_LeadingMuon_phi.png");
-
-    save(hDiffSubPt,  "Images/model_diff_SubleadingMuon_pt.png");
-    save(hDiffSubEta, "Images/model_diff_SubleadingMuon_eta.png");
-    save(hDiffSubPhi, "Images/model_diff_SubleadingMuon_phi.png");
-
-    save(hDiffMass, "Images/model_diff_Dimuon_mass.png");
-    save(hDiffPt,   "Images/model_diff_Dimuon_pt.png");
-    save(hDiffRap,  "Images/model_diff_Dimuon_rapidity.png");
-    save(hDiffPhi,  "Images/model_diff_Dimuon_phi.png");
-
-
-
+    // CreateBdtPredictionHistograms(histogramDf, prediction.selectedIndices);
+    // CreateBdtDifferenceHistograms(histogramDf, prediction.selectedIndices);
+    // CreateBdtFalseHistograms(evaluationDf, prediction.rejectedIndices, prediction.trueNegative, prediction.falseNegative, falseHistogramUsagePercentage, randomSeed);
+    // CreateEvaluationDataHistograms(testingDf);
 
     logElapsedTime("BDT evaluation COMPLETE");
-
     std::cout << "evaluateDrellYanBdt END\n";
 }
 

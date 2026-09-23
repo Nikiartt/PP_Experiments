@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <iomanip>
 
+
 static const std::string LOG_FILE = "log.txt";
 using Clock = std::chrono::steady_clock;
 static Clock::time_point EXECUTION_START_TIME = Clock::now();
@@ -285,6 +286,8 @@ RNode filterCosmicMuons(RNode df) {
     }, {"IsolatedMuonPairs", "Muon_eta", "Muon_phi"}, "Cosmic ray rejection");
 }
 
+//Full filter used to filter events from the real CMS data but it is not used for DY MC data set since all the events in the CM are already DY. So no sence to apply filer. It is good for filtering the jets.
+//Jis tiesiog labai gerai išmeta W+Jets ir QCD foną, bet palieka beveik visą top-antitop, WW, WZ ir t.t.
 RNode fullMuonFilter(RNode df) {
     df = filterHltIsoMu24(df);
     df = filterAtLeastTwoMuons(df);
@@ -303,6 +306,22 @@ RNode fullMuonFilter(RNode df) {
     df = filterMuonTrackerIsolation(df);
     df = filterCosmicMuons(df);
     return df;
+}
+
+//This is more smaller filter only for DY MC data set. We leave only triger pT an n: kadangi detektoriaus geometrija ir trigeris yra dalykai, kurie paveikia visus duomenis
+RNode BDT_HLT_IsoMu24_pT_n_filter(RNode df) {
+    return df
+        .Filter("HLT_IsoMu24", "HLT_IsoMu24")
+        .Filter([](const RVec<float>& pt, const RVec<float>& eta) {
+            for (size_t i = 0; i < pt.size(); ++i)
+                for (size_t j = i + 1; j < pt.size(); ++j) {
+                    if (std::abs(eta[i]) >= 2.4f || std::abs(eta[j]) >= 2.4f) continue;
+                    const float leadPt = std::max(pt[i], pt[j]);
+                    const float subPt = std::min(pt[i], pt[j]);
+                    if (leadPt >= 8.f && subPt > 10.f) return true;
+                }
+            return false;
+        }, {"Muon_pt", "Muon_eta"}, "Muon pT and eta");
 }
 
 RNode makeMuonAndDimuonKinematicsDataFrame(RNode df) {
@@ -508,6 +527,7 @@ void MlRun()
     const double DatasetUsagePercentage = 10.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
     const double EvaluationUsagePercentage = 100.00;//Cuts if the data set is still so big and dont fit into memory.
     const double HistogramUsagePercentage = 100.00;
+    const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
     
     //Parameters adjustment
     //START LOG 26/27+-
@@ -523,7 +543,10 @@ void MlRun()
     //Log 38 tryed to reduce the minimumNodeSizePercent to 0.001 (from 0.005) No significant changes.
     //LOG 41 increased the training data to 10 percents and the precision dropped to 82 percents.
 
-    const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";//Separate the main file since we have to separate these events in future from bg.
+    //Separate the main file since we have to separate these events in future from bg.
+    const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
+    // const std::string DyMainFilesPath = "files-recid-30563.txt"; //REAL CMS DATA https://opendata.cern.ch/record/30563
+
     const std::vector<std::string> BackgroundFilesPaths = {
         "Background_dataset_files/ttbar_xrootd_files.txt",
         "Background_dataset_files/single_top_tw_xrootd_files.txt",
@@ -548,6 +571,7 @@ void MlRun()
     const double decisionThreshold = 0.0;//decisionThreshold is the cutoff applied to the BDT output score to convert the continuous BDT prediction into a binary class.
 
     logLine("--- ML RUN SETTINGS ---");
+    logValue("DyMainFilesPath", DyMainFilesPath);   
     logValue("MaxMuons", MaxMuons);
     logValue("Training fraction", trainingFraction);
     logValue("Testing fraction", 1.0 - trainingFraction);
@@ -626,7 +650,7 @@ void MlRun()
         {"SourceFileId", "run", "luminosityBlock", "event"}
     );
 
-    auto filteredDyEvents = fullMuonFilter(dfWithKey.Filter("IsMainDyFile"));
+    auto filteredDyEvents = BDT_HLT_IsoMu24_pT_n_filter(dfWithKey.Filter("IsMainDyFile")); // used for dfWithKey to mark passed filter.
 
     auto passedDyKeysResult = filteredDyEvents.Take<ROOT::VecOps::RVec<ULong64_t>>("EventKeyParts");
 
@@ -645,6 +669,7 @@ void MlRun()
         });
     }
 
+    //Events that fail filter remain available in dfWithKey. So labeledDyDf contains all events from all loaded files
     auto labeledDyDf = dfWithKey.Define(
         "IsDyProcess",
         [passedDyKeys](
@@ -703,45 +728,46 @@ void MlRun()
 
     auto cachedBdtData = dfWithSplit.Cache(cachedColumns);
 
-    ROOT::RDF::RNode trainingNode = dfWithSplit.Filter("IsTraining");
-    ROOT::RDF::RNode testingNode  = dfWithSplit.Filter("!IsTraining");
+    ROOT::RDF::RNode trainingNode = dfWithSplit.Filter("IsTraining"); //trainingNode contains 30% of all events from all loaded files
+    ROOT::RDF::RNode testingNode  = dfWithSplit.Filter("!IsTraining"); //testingNode contains 70% of all events from all loaded files
     
     std::cout << "cachedBdtData completed\n";
 
     logElapsedTime("Training/testing dataframes created");
 
         //Main and BG events will all the amount of muons pass in the training.
-    // const std::string weightsFile = trainDrellYanBdt(//
-    //     features,
-    //     trainingNode,
-    //     testingNode,
-    //     "MlTemp/TMVA_DY_training.root",
-    //     "MlTemp/BDT_training_history.root",
-    //     "DrellYanClassification",
-    //     "BDTG",
-    //     "DY_BDT_dataset",
-    //     numberOfTrees,
-    //     maximumDepth,
-    //     minimumNodeSizePercent,
-    //     baggedSampleFraction,
-    //     numberOfCuts,
-    //     shrinkage,
-    //     randomSeed,
-    //     DatasetUsagePercentage,
-    //     numberOfThreads
-    // );
-    // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
+    const std::string weightsFile = trainDrellYanBdt(//
+        features,
+        trainingNode,
+        testingNode,
+        "MlTemp/TMVA_DY_training.root",
+        "MlTemp/BDT_training_history.root",
+        "DrellYanClassification_2026_09_23_good_filter_depth50_trees5_cuts30_bagged0.05_minNode0.001_BDTG.weights.xml",
+        "BDTG",
+        "DY_BDT_dataset",
+        numberOfTrees,
+        maximumDepth,
+        minimumNodeSizePercent,
+        baggedSampleFraction,
+        numberOfCuts,
+        shrinkage,
+        randomSeed,
+        DatasetUsagePercentage,
+        numberOfThreads
+    );
+    logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
 
 
     evaluateDrellYanBdt(
         features,
         testingNode,
-        // weightsFile,
-        "MlTemp/DY_BDT_dataset/weights/DrellYanClassification_2026_09_17_data10_depth50_trees5_cuts30_bagged0.05_minNode0.001_BDTG.weights.xml",
+        weightsFile,
+        // "MlTemp/DY_BDT_dataset/weights/DrellYanClassification_2026_09_17_data10_depth50_trees5_cuts30_bagged0.05_minNode0.001_BDTG.weights.xml",
         "BDTG",
         decisionThreshold,
         EvaluationUsagePercentage,
         HistogramUsagePercentage,
+        FalseHistogramUsagePercentage,
         randomSeed
     );
 
