@@ -22,44 +22,100 @@ Random seed: 1
 Decision threshold: 0
 ------
 --- CREATE TRAINING AND TESTING DATA ---
-Training/testing dataframes created elapsed time: 19.5314 s
-lazy RDataFrame computations START elapsed time: 19.5686 s
-lazy RDataFrame computations END elapsed time: 140.136 s
-addEventsToTmva START elapsed time: 140.17 s
-addEventsToTmva END elapsed time: 162.482 s
+Training/testing dataframes created elapsed time: 18.4653 s
+lazy RDataFrame computations START elapsed time: 18.5091 s
+lazy RDataFrame computations END elapsed time: 134.607 s
+addEventsToTmva START elapsed time: 134.773 s
+addEventsToTmva END elapsed time: 155.599 s
 Training events total: 1068755
 
 --- BDT TRAINING DATA ---
 Dataset usage (%): 10
-Training signal: 26048
-Training background: 1042707
-Testing signal: 11233
-Testing background: 446346
+Training signal: 27253
+Training background: 1041502
+Testing signal: 11722
+Testing background: 445857
 
 --- BASELINE ---
-Training baseline accuracy (always background): 0.975628
-Testing baseline accuracy (always background): 0.975451
+Training baseline accuracy (always background): 0.9745
+Testing baseline accuracy (always background): 0.974383
 Trained model: MlTemp/DY_BDT_dataset/weights/DrellYanClassification_2026_09_23_good_filter_depth50_trees5_cuts30_bagged0.05_minNode0.001_BDTG.weights.xml_BDTG.weights.xml
-BDT training END elapsed time: 557.102 s
+BDT training END elapsed time: 481.799 s
 Testing dataframe events: 4579228
-Testing dataframe DY events: 112041
-Testing dataframe DY [%]: 2.44672
+Testing dataframe DY events: 117189
+Testing dataframe DY [%]: 2.55914
 
 --- BDT evaluation ---
 Evaluated events: 4579228
-Model selected events: 116598
+Model selected events: 121919
 Decision threshold: 0
-True positives: 98666
-True negatives: 4.44926e+06
-False positives: 17932
-False negatives: 13375
-Accuracy: 0.993163
-PRECISION: 0.846207
-Recall: 0.880624
-Background rejection: 0.995986
-F1: 0.863072
-ROC AUC: 0.977737
-S/sqrt(S+B): 288.95
-BDT evaluation COMPLETE elapsed time: 761.29 s
-BDT evaluation END elapsed time: 761.313 s
-MlRun complete elapsed time: 761.346 s
+True positives: 103228
+True negatives: 4.44335e+06
+False positives: 18691
+False negatives: 13961
+Accuracy: 0.99287
+PRECISION: 0.846693
+Recall: 0.880868
+Background rejection: 0.995811
+F1: 0.863442
+ROC AUC: 0.978233
+S/sqrt(S+B): 295.639
+
+--- CREATE HISTOGRAMS ---
+Events used for histograms: 121919
+Evaluation histogram saved: Images/bdt_predicted_LeadingMuon_pt.png
+Evaluation histogram saved: Images/bdt_predicted_LeadingMuon_eta.png
+Evaluation histogram saved: Images/bdt_predicted_LeadingMuon_phi.png
+Evaluation histogram saved: Images/bdt_predicted_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/bdt_predicted_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/bdt_predicted_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_mass.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_mass_log.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_pt.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_rapidity.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_phi.png
+
+--- CREATE MODEL DIFFERENCE HISTOGRAMS ---
+Hard-filter DY events missed by model: 13961
+Evaluation histogram saved: Images/model_diff_LeadingMuon_pt.png
+Evaluation histogram saved: Images/model_diff_LeadingMuon_eta.png
+Evaluation histogram saved: Images/model_diff_LeadingMuon_phi.png
+Evaluation histogram saved: Images/model_diff_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/model_diff_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/model_diff_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/model_diff_Dimuon_mass.png
+Evaluation histogram saved: Images/model_diff_Dimuon_pt.png
+Evaluation histogram saved: Images/model_diff_Dimuon_rapidity.png
+Evaluation histogram saved: Images/model_diff_Dimuon_phi.png
+
+--- CREATE MODEL FALSE HISTOGRAMS ---
+Non-DY histogram usage [%]: 100
+Evaluated non-DY predictions: 4.45731e+06
+Sampled non-DY predictions before muon requirements: 4457309
+Sampled non-DY events with at least two muons: 396860
+Evaluation histogram saved: Images/model_false_LeadingMuon_pt.png
+Evaluation histogram saved: Images/model_false_LeadingMuon_eta.png
+Evaluation histogram saved: Images/model_false_LeadingMuon_phi.png
+Evaluation histogram saved: Images/model_false_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/model_false_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/model_false_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/model_false_Dimuon_mass.png
+Evaluation histogram saved: Images/model_false_Dimuon_pt.png
+Evaluation histogram saved: Images/model_false_Dimuon_rapidity.png
+Evaluation histogram saved: Images/model_false_Dimuon_phi.png
+Events passed into evaluation: 4579228
+Input events with at least two muons: 518779
+Evaluation histogram saved: Images/unfiltered_LeadingMuon_pt.png
+Evaluation histogram saved: Images/unfiltered_LeadingMuon_eta.png
+Evaluation histogram saved: Images/unfiltered_LeadingMuon_phi.png
+Evaluation histogram saved: Images/unfiltered_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/unfiltered_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/unfiltered_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_mass.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_pt.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_rapidity.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_phi.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_mass_log.png
+BDT evaluation COMPLETE elapsed time: 853.59 s
+BDT evaluation END elapsed time: 853.625 s
+MlRun complete elapsed time: 853.649 s

@@ -925,6 +925,103 @@ void CreateEvaluationDataHistograms(ROOT::RDF::RNode testingDf)
     SaveBdtHistogram(*inputHists[6], "Images/unfiltered_Dimuon_mass_log.png", true);
 }
 
+void CreateBackgroundPredictionHistograms(
+    ROOT::RDF::RNode testingDf,
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& selectedIndices,
+    const std::vector<std::string>& backgroundFilesPaths)
+{
+    struct HistSpec { const char* name; const char* axis; double min, max; };
+
+    const HistSpec specs[] = {
+        {"LeadingMuon_pt",     "Leading muon p_{T} [GeV]",      0, 140},
+        {"LeadingMuon_eta",    "Leading muon #eta",          -2.4, 2.4},
+        {"LeadingMuon_phi",    "Leading muon #phi [rad]",    -3.2, 3.2},
+        {"SubleadingMuon_pt",  "Subleading muon p_{T} [GeV]",   0, 140},
+        {"SubleadingMuon_eta", "Subleading muon #eta",       -2.4, 2.4},
+        {"SubleadingMuon_phi", "Subleading muon #phi [rad]", -3.2, 3.2},
+        {"Dimuon_mass",        "Dimuon mass [GeV]",             50, 150},
+        {"Dimuon_pt",          "Dimuon p_{T} [GeV]",             0, 200},
+        {"Dimuon_rapidity",    "Dimuon rapidity",               -3, 3},
+        {"Dimuon_phi",         "Dimuon #phi [rad]",           -3.2, 3.2}
+    };
+
+    std::vector<std::string> names;
+    std::vector<ROOT::RDF::RResultPtr<ULong64_t>> counts;
+    std::vector<std::vector<ROOT::RDF::RResultPtr<TH1D>>> allHists;
+    std::vector<ROOT::RDF::RResultHandle> handles;
+
+    for (size_t bg = 0; bg < backgroundFilesPaths.size(); ++bg) {
+        std::string name = backgroundFilesPaths[bg];
+        const size_t slash = name.find_last_of("/\\");
+        if (slash != std::string::npos) name = name.substr(slash + 1);
+
+        const std::string suffix = "_xrootd_files.txt";
+        if (name.size() >= suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
+            name.erase(name.size() - suffix.size());
+
+        const UInt_t fileClass = static_cast<UInt_t>(bg + 2);
+
+        auto df = testingDf
+            .Filter([fileClass](UInt_t value) { return value == fileClass; }, {"FILE_CLASSIFICATOR"})
+            .Filter([selectedIndices](ULong64_t index) { return selectedIndices->find(index) != selectedIndices->end(); }, {"Index"})
+            .Filter([](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+                       const ROOT::VecOps::RVec<float>& phi) {
+                return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+            .Define("BackgroundModelTrueKinematics",
+                [](const ROOT::VecOps::RVec<float>& pt, const ROOT::VecOps::RVec<float>& eta,
+                   const ROOT::VecOps::RVec<float>& phi) {
+                    int lead = -1, sub = -1;
+
+                    for (size_t i = 0; i < pt.size(); ++i) {
+                        if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
+                        else if (sub < 0 || pt[i] > pt[sub]) sub = i;
+                    }
+
+                    ROOT::Math::PtEtaPhiMVector a(pt[lead], eta[lead], phi[lead], 0.105658);
+                    ROOT::Math::PtEtaPhiMVector b(pt[sub], eta[sub], phi[sub], 0.105658);
+                    const auto d = a + b;
+
+                    return ROOT::VecOps::RVec<float>{
+                        pt[lead], eta[lead], phi[lead], pt[sub], eta[sub], phi[sub],
+                        static_cast<float>(d.M()), static_cast<float>(d.Pt()),
+                        static_cast<float>(d.Rapidity()), static_cast<float>(d.Phi())
+                    };
+                }, {"Muon_pt", "Muon_eta", "Muon_phi"});
+
+        auto count = df.Count();
+        handles.emplace_back(count);
+        counts.emplace_back(count);
+
+        std::vector<ROOT::RDF::RResultPtr<TH1D>> hists;
+
+        for (size_t i = 0; i < 10; ++i) {
+            const std::string column = name + "_model_true_" + specs[i].name;
+            df = df.Define(column, "BackgroundModelTrueKinematics[" + std::to_string(i) + "]");
+
+            const std::string title = name + " model predicted DY;" + specs[i].axis + ";Events";
+            hists.emplace_back(df.Histo1D({column.c_str(), title.c_str(), 100, specs[i].min, specs[i].max}, column));
+            handles.emplace_back(hists.back());
+        }
+
+        names.emplace_back(name);
+        allHists.emplace_back(std::move(hists));
+    }
+
+    ROOT::RDF::RunGraphs(handles);
+    gSystem->mkdir("Images", true);
+
+    for (size_t bg = 0; bg < names.size(); ++bg) {
+        std::cout << names[bg] << " background predicted as DY: " << *counts[bg] << "\n";
+        logValue(names[bg] + " background predicted as DY", *counts[bg]);
+
+        for (size_t i = 0; i < 10; ++i)
+            SaveBdtHistogram(*allHists[bg][i], "Images/" + names[bg] + "_model_true_" + specs[i].name + ".png");
+
+        SaveBdtHistogram(*allHists[bg][6], "Images/" + names[bg] + "_model_true_Dimuon_mass_log.png", true);
+    }
+}
+
 void evaluateDrellYanBdt(
     const std::vector<std::string>& features,
     ROOT::RDF::RNode testingDf,
@@ -934,7 +1031,8 @@ void evaluateDrellYanBdt(
     double evaluationUsagePercentage,
     double histogramUsagePercentage,
     double falseHistogramUsagePercentage,
-    unsigned randomSeed)
+    unsigned randomSeed,
+    const std::vector<std::string>& backgroundFilesPaths)
 {
     std::cout << "evaluateDrellYanBdt Start\n";
     std::cout << "Features: " << features.size() << "\n";
@@ -1072,10 +1170,11 @@ void evaluateDrellYanBdt(
             return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
         }, {"Index"});
 
-    // CreateBdtPredictionHistograms(histogramDf, prediction.selectedIndices);
-    // CreateBdtDifferenceHistograms(histogramDf, prediction.selectedIndices);
-    // CreateBdtFalseHistograms(evaluationDf, prediction.rejectedIndices, prediction.trueNegative, prediction.falseNegative, falseHistogramUsagePercentage, randomSeed);
-    // CreateEvaluationDataHistograms(testingDf);
+    CreateBdtPredictionHistograms(histogramDf, prediction.selectedIndices);
+    CreateBdtDifferenceHistograms(histogramDf, prediction.selectedIndices);
+    CreateBdtFalseHistograms(evaluationDf, prediction.rejectedIndices, prediction.trueNegative, prediction.falseNegative, falseHistogramUsagePercentage, randomSeed);
+    CreateBackgroundPredictionHistograms(testingDf, prediction.selectedIndices, backgroundFilesPaths);
+    CreateEvaluationDataHistograms(testingDf);
 
     logElapsedTime("BDT evaluation COMPLETE");
     std::cout << "evaluateDrellYanBdt END\n";

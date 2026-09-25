@@ -318,7 +318,7 @@ RNode BDT_HLT_IsoMu24_pT_n_filter(RNode df) {
                     if (std::abs(eta[i]) >= 2.4f || std::abs(eta[j]) >= 2.4f) continue;
                     const float leadPt = std::max(pt[i], pt[j]);
                     const float subPt = std::min(pt[i], pt[j]);
-                    if (leadPt >= 8.f && subPt > 10.f) return true;
+                    if (leadPt >= 24.f && subPt > 6.f) return true;
                 }
             return false;
         }, {"Muon_pt", "Muon_eta"}, "Muon pT and eta");
@@ -410,11 +410,7 @@ ULong64_t mix64(ULong64_t x)
     return x ^ (x >> 31);
 }
 
-ULong64_t makeEventIndex(
-    UInt_t fileId,
-    UInt_t run,
-    UInt_t lumi,
-    ULong64_t event)
+ULong64_t makeEventIndex(UInt_t fileId, UInt_t run, UInt_t lumi, ULong64_t event)
 {
     ULong64_t h = mix64(event);
     h ^= mix64((static_cast<ULong64_t>(fileId) << 32) | run);
@@ -524,10 +520,10 @@ void MlRun()
     const size_t DevelopmentFilesPerSample = 2;
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
-    const double DatasetUsagePercentage = 10.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
-    const double EvaluationUsagePercentage = 100.00;//Cuts if the data set is still so big and dont fit into memory.
-    const double HistogramUsagePercentage = 100.00;
-    const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
+    const double DatasetUsagePercentage = 5.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
+    const double EvaluationUsagePercentage = 50.00;//Cuts if the data set is still so big and dont fit into memory.
+    const double HistogramUsagePercentage = 50.00;
+    const double FalseHistogramUsagePercentage = 50.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
     
     //Parameters adjustment
     //START LOG 26/27+-
@@ -589,53 +585,77 @@ void MlRun()
     // if (!UsePreparedData) {
     logLine("--- CREATE TRAINING AND TESTING DATA ---");
 
-    const auto dyMainFiles = loadFileList(DyMainFilesPath, DevelopmentMode,DevelopmentFilesPerSample);
+    // const auto dyMainFiles = loadFileList(DyMainFilesPath, DevelopmentMode,DevelopmentFilesPerSample);
 
-    std::vector<std::string> bgFiles;
-    for (const std::string& fileList : BackgroundFilesPaths) {
-        const auto files = loadFileList(fileList, DevelopmentMode, DevelopmentFilesPerSample);
-        bgFiles.insert(bgFiles.end(), files.begin(), files.end());
-    }
+    // std::vector<std::string> bgFiles;
+    // for (const std::string& fileList : BackgroundFilesPaths) {
+        // const auto files = loadFileList(fileList, DevelopmentMode, DevelopmentFilesPerSample);
+        // bgFiles.insert(bgFiles.end(), files.begin(), files.end());
+    // }
+    // std::vector<std::string> allFiles = dyMainFiles;
+    // allFiles.insert(allFiles.end(), bgFiles.begin(), bgFiles.end());
+
+    // ROOT::EnableImplicitMT(numberOfThreads);//Enabling ROOT parallelism So now dont refer to  rdfentry_ !!!
+    // ROOT::RDataFrame dfMainAndBg("Events", allFiles);
+
+    // const std::unordered_set<std::string> dyMainFileSet(//Creating a set containing the DY input filenames
+    //     dyMainFiles.begin(),
+    //     dyMainFiles.end()
+    // );
+
+    // auto dfMarkedMainEvents = dfMainAndBg
+    //     .DefinePerSample( // DefinePerSample is evaluated for the input sample/file. (not simple Define)
+    //         "SourceFileId", // Creating SourceFileId
+    //         [allFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
+    //             for (UInt_t i = 0; i < allFiles.size(); ++i) {//Finding which file this sample belongs to
+    //                 if (info.Contains(allFiles[i]))//info contains information about the sample currently being processed
+    //                     return i;
+    //             }
+    //             throw std::runtime_error("Cannot determine source file");
+    //         }
+    //     )
+    //     .DefinePerSample(//generates a Boolean
+    //         "IsMainDyFile",
+    //         [dyMainFileSet](unsigned int, const ROOT::RDF::RSampleInfo& info) {
+    //             for (const auto& file : dyMainFileSet) {
+    //                 if (info.Contains(file))
+    //                     return true;
+    //             }
+    //             return false;
+    //         }
+    //     );
+
+    const auto dyMainFiles = loadFileList(DyMainFilesPath, DevelopmentMode, DevelopmentFilesPerSample);
+
     std::vector<std::string> allFiles = dyMainFiles;
-    allFiles.insert(allFiles.end(), bgFiles.begin(), bgFiles.end());
+    std::vector<UInt_t> allFileClasses(dyMainFiles.size(), 1);
 
-    ROOT::EnableImplicitMT(numberOfThreads);//Enabling ROOT parallelism So now dont refer to  rdfentry_ !!!
+    for (size_t i = 0; i < BackgroundFilesPaths.size(); ++i) {
+        const auto files = loadFileList(BackgroundFilesPaths[i], DevelopmentMode, DevelopmentFilesPerSample);
+        allFiles.insert(allFiles.end(), files.begin(), files.end());
+        allFileClasses.insert(allFileClasses.end(), files.size(), static_cast<UInt_t>(i + 2));
+    }
+
+    ROOT::EnableImplicitMT(numberOfThreads);
     ROOT::RDataFrame dfMainAndBg("Events", allFiles);
 
-    const std::unordered_set<std::string> dyMainFileSet(//Creating a set containing the DY input filenames
-        dyMainFiles.begin(),
-        dyMainFiles.end()
-    );
-
-    auto dfMarkedMainEvents = dfMainAndBg
-        .DefinePerSample( // DefinePerSample is evaluated for the input sample/file. (not simple Define)
-            "SourceFileId", // Creating SourceFileId
+    auto dfMarkedEvents = dfMainAndBg
+        .DefinePerSample("SourceFileId",
             [allFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
-                for (UInt_t i = 0; i < allFiles.size(); ++i) {//Finding which file this sample belongs to
-                    if (info.Contains(allFiles[i]))//info contains information about the sample currently being processed
-                        return i;
-                }
+                for (UInt_t i = 0; i < allFiles.size(); ++i)
+                    if (info.Contains(allFiles[i])) return i;
                 throw std::runtime_error("Cannot determine source file");
-            }
-        )
-        .DefinePerSample(//generates a Boolean
-            "IsMainDyFile",
-            [dyMainFileSet](unsigned int, const ROOT::RDF::RSampleInfo& info) {
-                for (const auto& file : dyMainFileSet) {
-                    if (info.Contains(file))
-                        return true;
-                }
-                return false;
-            }
-        );
+            })
+        .Define("FILE_CLASSIFICATOR",
+            [allFileClasses](UInt_t fileId) { return allFileClasses.at(fileId); },
+            {"SourceFileId"});
 
-    auto dfWithIndex = dfMarkedMainEvents.Define(
+    auto dfWithIndex = dfMarkedEvents.Define(
         "Index",
         [](UInt_t fileId, UInt_t run, UInt_t lumi, ULong64_t event) {
             return makeEventIndex(fileId, run, lumi, event);
         },
-        {"SourceFileId", "run", "luminosityBlock", "event"}
-    );
+        {"SourceFileId", "run", "luminosityBlock", "event"});
 
     auto dfWithKey = dfWithIndex.Define(
         "EventKeyParts",
@@ -650,7 +670,7 @@ void MlRun()
         {"SourceFileId", "run", "luminosityBlock", "event"}
     );
 
-    auto filteredDyEvents = BDT_HLT_IsoMu24_pT_n_filter(dfWithKey.Filter("IsMainDyFile")); // used for dfWithKey to mark passed filter.
+    auto filteredDyEvents = BDT_HLT_IsoMu24_pT_n_filter(dfWithKey.Filter("FILE_CLASSIFICATOR == 1"));
 
     auto passedDyKeysResult = filteredDyEvents.Take<ROOT::VecOps::RVec<ULong64_t>>("EventKeyParts");
 
@@ -670,35 +690,14 @@ void MlRun()
     }
 
     //Events that fail filter remain available in dfWithKey. So labeledDyDf contains all events from all loaded files
-    auto labeledDyDf = dfWithKey.Define(
-        "IsDyProcess",
-        [passedDyKeys](
-            UInt_t fileId,
-            UInt_t run,
-            UInt_t lumi,
-            ULong64_t event,
-            bool isMainDyFile)
-        {
-            if (!isMainDyFile)
-                return false;
-
-            const EventKey key{
-                fileId,
-                run,
-                lumi,
-                event
-            };
-
-            return passedDyKeys->find(key) != passedDyKeys->end();
-        },
-        {
-            "SourceFileId",
-            "run",
-            "luminosityBlock",
-            "event",
-            "IsMainDyFile"
-        }
-    );
+    auto labeledDyDf = dfWithKey
+        .Define("IsDyProcess",
+            [passedDyKeys](UInt_t fileId, UInt_t run, UInt_t lumi, ULong64_t event, UInt_t fileClass) {
+                if (fileClass != 1) return false;
+                return passedDyKeys->find({fileId, run, lumi, event}) != passedDyKeys->end();
+            },
+            {"SourceFileId", "run", "luminosityBlock", "event", "FILE_CLASSIFICATOR"})
+        .Filter("FILE_CLASSIFICATOR != 1 || IsDyProcess");//Adiitional filter that removes the IsDyProcess = 0
 
     auto bdtData = NormalizeToBdtDataFrame(labeledDyDf, MaxMuons);
 
@@ -736,39 +735,40 @@ void MlRun()
     logElapsedTime("Training/testing dataframes created");
 
         //Main and BG events will all the amount of muons pass in the training.
-    const std::string weightsFile = trainDrellYanBdt(//
-        features,
-        trainingNode,
-        testingNode,
-        "MlTemp/TMVA_DY_training.root",
-        "MlTemp/BDT_training_history.root",
-        "DrellYanClassification_2026_09_23_good_filter_depth50_trees5_cuts30_bagged0.05_minNode0.001_BDTG.weights.xml",
-        "BDTG",
-        "DY_BDT_dataset",
-        numberOfTrees,
-        maximumDepth,
-        minimumNodeSizePercent,
-        baggedSampleFraction,
-        numberOfCuts,
-        shrinkage,
-        randomSeed,
-        DatasetUsagePercentage,
-        numberOfThreads
-    );
-    logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
+    // const std::string weightsFile = trainDrellYanBdt(
+    //     features,
+    //     trainingNode,
+    //     testingNode,
+    //     "MlTemp/TMVA_DY_training.root",
+    //     "MlTemp/BDT_training_history.root",
+    //     "DrellYanClassification.weights.xml",
+    //     "BDTG",
+    //     "DY_BDT_dataset",
+    //     numberOfTrees,
+    //     maximumDepth,
+    //     minimumNodeSizePercent,
+    //     baggedSampleFraction,
+    //     numberOfCuts,
+    //     shrinkage,
+    //     randomSeed,
+    //     DatasetUsagePercentage,
+    //     numberOfThreads
+    // );
+    // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
 
 
     evaluateDrellYanBdt(
         features,
         testingNode,
-        weightsFile,
-        // "MlTemp/DY_BDT_dataset/weights/DrellYanClassification_2026_09_17_data10_depth50_trees5_cuts30_bagged0.05_minNode0.001_BDTG.weights.xml",
+        // weightsFile,
+        "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
         "BDTG",
         decisionThreshold,
         EvaluationUsagePercentage,
         HistogramUsagePercentage,
         FalseHistogramUsagePercentage,
-        randomSeed
+        randomSeed,
+        BackgroundFilesPaths
     );
 
     logElapsedTime("BDT evaluation END");
