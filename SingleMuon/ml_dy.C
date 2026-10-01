@@ -192,7 +192,12 @@ std::string trainDrellYanBdt(
             throw std::runtime_error("Missing testing feature: " + feature);
     }
 
-    std::cout << "All " << features.size() << " features exist in training and testing dataframes\n";
+    logLine("");
+    logLine("--- BDT TRAINING FEATURES ---");
+    logValue("Number of features", features.size());
+
+    for (size_t i = 0; i < features.size(); ++i)
+        logValue("Feature " + std::to_string(i + 1), features[i]);
 
     if (!trainingUsed.HasColumn("IsDyProcess") ||
         !testingUsed.HasColumn("IsDyProcess"))
@@ -1022,6 +1027,183 @@ void CreateBackgroundPredictionHistograms(
     }
 }
 
+static void CreateBdtSourceStackHistograms(
+    ROOT::RDF::RNode testingDf,
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& indices,
+    const std::vector<std::string>& backgroundFilesPaths,
+    const std::string& prefix,
+    const std::string& title)
+{
+    struct HistSpec { const char* name; const char* axis; double min, max; };
+
+    const HistSpec specs[] = {
+        {"LeadingMuon_pt",     "Leading muon p_{T} [GeV]",       0, 140},
+        {"LeadingMuon_eta",    "Leading muon #eta",           -2.4, 2.4},
+        {"LeadingMuon_phi",    "Leading muon #phi [rad]",     -3.2, 3.2},
+        {"SubleadingMuon_pt",  "Subleading muon p_{T} [GeV]",    0, 140},
+        {"SubleadingMuon_eta", "Subleading muon #eta",        -2.4, 2.4},
+        {"SubleadingMuon_phi", "Subleading muon #phi [rad]",  -3.2, 3.2},
+        {"Dimuon_mass",        "Dimuon mass [GeV]",              50, 150},
+        {"Dimuon_pt",          "Dimuon p_{T} [GeV]",               0, 200},
+        {"Dimuon_rapidity",    "Dimuon rapidity",                 -3, 3},
+        {"Dimuon_phi",         "Dimuon #phi [rad]",             -3.2, 3.2}
+    };
+
+    std::vector<std::string> sourceNames{"main_dy"};
+
+    for (std::string path : backgroundFilesPaths) {
+        const size_t slash = path.find_last_of("/\\");
+        if (slash != std::string::npos) path = path.substr(slash + 1);
+
+        const std::string suffix = "_xrootd_files.txt";
+        if (path.size() >= suffix.size() &&
+            path.compare(path.size() - suffix.size(), suffix.size(), suffix) == 0)
+            path.erase(path.size() - suffix.size());
+
+        sourceNames.push_back(path);
+    }
+
+    const std::vector<int> colors = {
+        kAzure - 9, kOrange - 3, kGreen + 2, kSpring - 6, kViolet - 6,
+        kMagenta - 7, kRed - 7, kCyan - 6, kGray + 1
+    };
+
+    auto df = testingDf
+        .Filter([indices](ULong64_t index) {
+            return indices->find(index) != indices->end();
+        }, {"Index"})
+        .Filter([](const ROOT::VecOps::RVec<float>& pt,
+                   const ROOT::VecOps::RVec<float>& eta,
+                   const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"})
+        .Define("BdtSourceKinematics",
+            [](const ROOT::VecOps::RVec<float>& pt,
+               const ROOT::VecOps::RVec<float>& eta,
+               const ROOT::VecOps::RVec<float>& phi) {
+                int lead = -1, sub = -1;
+
+                for (size_t i = 0; i < pt.size(); ++i) {
+                    if (lead < 0 || pt[i] > pt[lead]) { sub = lead; lead = i; }
+                    else if (sub < 0 || pt[i] > pt[sub]) sub = i;
+                }
+
+                ROOT::Math::PtEtaPhiMVector a(pt[lead], eta[lead], phi[lead], 0.105658);
+                ROOT::Math::PtEtaPhiMVector b(pt[sub], eta[sub], phi[sub], 0.105658);
+                const auto d = a + b;
+
+                return ROOT::VecOps::RVec<float>{
+                    pt[lead], eta[lead], phi[lead], pt[sub], eta[sub], phi[sub],
+                    static_cast<float>(d.M()), static_cast<float>(d.Pt()),
+                    static_cast<float>(d.Rapidity()), static_cast<float>(d.Phi())
+                };
+            }, {"Muon_pt", "Muon_eta", "Muon_phi"});
+
+    for (size_t i = 0; i < 10; ++i)
+        df = df.Define("BdtSource_" + std::string(specs[i].name),
+                       "BdtSourceKinematics[" + std::to_string(i) + "]");
+
+    std::vector<std::vector<ROOT::RDF::RResultPtr<TH1D>>> hists(sourceNames.size());
+    std::vector<ROOT::RDF::RResultPtr<ULong64_t>> counts;
+    std::vector<ROOT::RDF::RResultHandle> handles;
+
+    for (size_t source = 0; source < sourceNames.size(); ++source) {
+        const UInt_t fileClass = static_cast<UInt_t>(source + 1);
+
+        auto sourceDf = df.Filter(
+            [fileClass](UInt_t value) { return value == fileClass; },
+            {"FILE_CLASSIFICATOR"});
+
+        counts.emplace_back(sourceDf.Count());
+        handles.emplace_back(counts.back());
+
+        for (size_t i = 0; i < 10; ++i) {
+            const std::string column = "BdtSource_" + std::string(specs[i].name);
+            const std::string histName = prefix + "_" + std::to_string(source) + "_" + specs[i].name;
+
+            hists[source].emplace_back(sourceDf.Histo1D(
+                {histName.c_str(), "", 100, specs[i].min, specs[i].max}, column));
+
+            handles.emplace_back(hists[source].back());
+        }
+    }
+
+    ROOT::RDF::RunGraphs(handles);
+    gSystem->mkdir("Images", true);
+
+    for (size_t source = 0; source < sourceNames.size(); ++source) {
+        std::cout << title << " - " << sourceNames[source] << ": " << *counts[source] << '\n';
+        logValue(title + " - " + sourceNames[source], *counts[source]);
+    }
+
+    auto save = [&](size_t i, bool logY = false) {
+        const std::string canvasName = prefix + "_canvas_" + specs[i].name;
+        TCanvas canvas(canvasName.c_str(), "", 1000, 800);
+        canvas.SetLeftMargin(0.14);
+        canvas.SetRightMargin(0.22);
+        canvas.SetBottomMargin(0.13);
+        canvas.SetTicks(1, 1);
+        if (logY) canvas.SetLogy();
+
+        const std::string stackName = prefix + "_stack_" + specs[i].name;
+        const std::string stackTitle = title + ";" + specs[i].axis + ";Events";
+        THStack stack(stackName.c_str(), stackTitle.c_str());
+        TLegend legend(0.79, 0.52, 0.98, 0.90);
+        legend.SetBorderSize(0);
+        legend.SetFillStyle(0);
+
+        for (size_t source = 0; source < sourceNames.size(); ++source) {
+            TH1D* hist = hists[source][i].GetPtr();
+            hist->SetFillColor(colors[source % colors.size()]);
+            hist->SetLineColor(kBlack);
+            hist->SetLineWidth(1);
+            hist->SetStats(false);
+            stack.Add(hist);
+            legend.AddEntry(hist, sourceNames[source].c_str(), "f");
+        }
+
+        stack.Draw("HIST");
+        if (logY) stack.SetMinimum(0.5);
+        stack.GetXaxis()->SetTitle(specs[i].axis);
+        stack.GetYaxis()->SetTitle("Events");
+        legend.Draw();
+
+        const std::string file = "Images/" + prefix + "_" + specs[i].name +
+                                 (logY ? "_log.png" : ".png");
+
+        canvas.SaveAs(file.c_str());
+        logValue("Source stacked histogram saved", file);
+    };
+
+    for (size_t i = 0; i < 10; ++i) save(i);
+    save(6, true);
+}
+
+
+void CreateBdtPositiveSourceHistograms(
+    ROOT::RDF::RNode testingDf,
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& selectedIndices,
+    const std::vector<std::string>& backgroundFilesPaths)
+{
+    CreateBdtSourceStackHistograms(
+        testingDf, selectedIndices, backgroundFilesPaths,
+        "bdt_positive_sources", "BDT predicted DY by source");
+}
+
+
+void CreateBdtRejectedSourceHistograms(
+    ROOT::RDF::RNode testingDf,
+    const std::vector<ULong64_t>& rejectedIndices,
+    const std::vector<std::string>& backgroundFilesPaths)
+{
+    auto rejectedSet = std::make_shared<std::unordered_set<ULong64_t>>(
+        rejectedIndices.begin(), rejectedIndices.end());
+
+    CreateBdtSourceStackHistograms(
+        testingDf, rejectedSet, backgroundFilesPaths,
+        "bdt_rejected_sources", "BDT rejected as non-DY by source");
+}
+
 void evaluateDrellYanBdt(
     const std::vector<std::string>& features,
     ROOT::RDF::RNode testingDf,
@@ -1170,11 +1352,13 @@ void evaluateDrellYanBdt(
             return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
         }, {"Index"});
 
-    CreateBdtPredictionHistograms(histogramDf, prediction.selectedIndices);
-    CreateBdtDifferenceHistograms(histogramDf, prediction.selectedIndices);
-    CreateBdtFalseHistograms(evaluationDf, prediction.rejectedIndices, prediction.trueNegative, prediction.falseNegative, falseHistogramUsagePercentage, randomSeed);
-    CreateBackgroundPredictionHistograms(testingDf, prediction.selectedIndices, backgroundFilesPaths);
-    CreateEvaluationDataHistograms(testingDf);
+    // CreateBdtPredictionHistograms(histogramDf, prediction.selectedIndices);//Model predicted as true DY
+    // CreateBdtFalseHistograms(evaluationDf, prediction.rejectedIndices, prediction.trueNegative, prediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
+    // CreateBdtDifferenceHistograms(histogramDf, prediction.selectedIndices);
+    // CreateBackgroundPredictionHistograms(testingDf, prediction.selectedIndices, backgroundFilesPaths);
+    CreateBdtPositiveSourceHistograms(evaluationDf, prediction.selectedIndices, backgroundFilesPaths);
+    CreateBdtRejectedSourceHistograms(evaluationDf, prediction.rejectedIndices, backgroundFilesPaths);
+    // CreateEvaluationDataHistograms(testingDf);
 
     logElapsedTime("BDT evaluation COMPLETE");
     std::cout << "evaluateDrellYanBdt END\n";

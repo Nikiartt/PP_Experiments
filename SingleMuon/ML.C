@@ -521,9 +521,9 @@ void MlRun()
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const double DatasetUsagePercentage = 5.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
-    const double EvaluationUsagePercentage = 50.00;//Cuts if the data set is still so big and dont fit into memory.
-    const double HistogramUsagePercentage = 50.00;
-    const double FalseHistogramUsagePercentage = 50.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
+    const double EvaluationUsagePercentage = 100.00;//Cuts if the data set is still so big and dont fit into memory.
+    const double HistogramUsagePercentage = 100.00;
+    const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
     
     //Parameters adjustment
     //START LOG 26/27+-
