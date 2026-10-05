@@ -520,10 +520,14 @@ void MlRun()
     const size_t DevelopmentFilesPerSample = 2;
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
+    const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
     const double DatasetUsagePercentage = 5.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
     const double EvaluationUsagePercentage = 100.00;//Cuts if the data set is still so big and dont fit into memory.
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
+
+    const std::string RealDataFilesPath = "files-recid-30563.txt"; //REAL CMS DATA https://opendata.cern.ch/record/30563, Goes directly into evaluation
+    const double RealDataUsagePercentage = 1.00; 
     
     //Parameters adjustment
     //START LOG 26/27+-
@@ -540,8 +544,7 @@ void MlRun()
     //LOG 41 increased the training data to 10 percents and the precision dropped to 82 percents.
 
     //Separate the main file since we have to separate these events in future from bg.
-    const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    // const std::string DyMainFilesPath = "files-recid-30563.txt"; //REAL CMS DATA https://opendata.cern.ch/record/30563
+    // const std::string DyMainFilesPath = "files-recid-30563.txt"; 
 
     const std::vector<std::string> BackgroundFilesPaths = {
         "Background_dataset_files/ttbar_xrootd_files.txt",
@@ -756,10 +759,43 @@ void MlRun()
     // );
     // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
 
+    //REAL DATA PREPARATION FOR EVALUATION
+    if (!std::isfinite(RealDataUsagePercentage) || RealDataUsagePercentage <= 0.0 || RealDataUsagePercentage > 100.0)
+        throw std::runtime_error("Real-data usage percentage must be in (0, 100]");
 
+    const auto realDataFiles = loadFileList(RealDataFilesPath, DevelopmentMode, DevelopmentFilesPerSample);
+    ROOT::RDataFrame realDataDf("Events", realDataFiles);
+
+    auto realDataWithIndex = realDataDf
+        .DefinePerSample("SourceFileId", [realDataFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
+            for (UInt_t i = 0; i < realDataFiles.size(); ++i)
+                if (info.Contains(realDataFiles[i])) return i;
+            throw std::runtime_error("Cannot determine real-data source file");
+        })
+        .Define("Index", [](UInt_t fileId, UInt_t run, UInt_t lumi, ULong64_t event) {
+            return makeEventIndex(fileId, run, lumi, event);
+        }, {"SourceFileId", "run", "luminosityBlock", "event"});
+
+    const ULong64_t realDataKeepThreshold = static_cast<ULong64_t>(std::llround(RealDataUsagePercentage * 100.0));
+    auto realDataUsed = realDataWithIndex.Filter(
+        [realDataKeepThreshold, randomSeed](ULong64_t index) {
+            return (index * 7919ULL + randomSeed) % 10000ULL < realDataKeepThreshold;
+        }, {"Index"});
+
+    auto filteredRealData = BDT_HLT_IsoMu24_pT_n_filter(realDataUsed);
+    auto realBdtData = NormalizeToBdtDataFrame(filteredRealData, MaxMuons);
+
+    if (realBdtData.features != features)
+        throw std::runtime_error("Real-data and MC BDT feature lists differ");
+
+    logValue("Real-data files", realDataFiles.size());
+    logValue("Real-data usage [%]", RealDataUsagePercentage);
+
+    //EVALUATION
     evaluateDrellYanBdt(
         features,
         testingNode,
+        realBdtData.df,
         // weightsFile,
         "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
         "BDTG",

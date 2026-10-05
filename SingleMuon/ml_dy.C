@@ -463,7 +463,7 @@ struct BdtPredictionResult {
     std::vector<ULong64_t> rejectedIndices;
 };
 
-BdtPredictionResult RunDrellYanBdtPrediction(
+BdtPredictionResult RunMcDrellYanBdtPrediction(
     const std::vector<std::string>& features, ROOT::RDF::RNode evaluationDf,
     const std::string& weightsFile, const std::string& methodName, double decisionThreshold)
 {
@@ -1204,9 +1204,69 @@ void CreateBdtRejectedSourceHistograms(
         "bdt_rejected_sources", "BDT rejected as non-DY by source");
 }
 
+struct RealDataBdtPrediction {
+    ULong64_t index;
+    Float_t score;
+    bool predictedDy;
+};
+
+std::vector<RealDataBdtPrediction> RunRealDataDrellYanBdtPrediction(
+    const std::vector<std::string>& features, ROOT::RDF::RNode realDataDf,
+    const std::string& weightsFile, const std::string& methodName, double decisionThreshold)
+{
+    if (features.empty()) throw std::runtime_error("Real-data BDT feature list is empty");
+    if (!realDataDf.HasColumn("Index")) throw std::runtime_error("Real-data dataframe is missing Index");
+
+    std::string featureExpression = "ROOT::VecOps::RVec<float>{";
+    for (size_t i = 0; i < features.size(); ++i) {
+        if (!realDataDf.HasColumn(features[i]))
+            throw std::runtime_error("Missing real-data feature: " + features[i]);
+        if (i > 0) featureExpression += ", ";
+        featureExpression += features[i];
+    }
+    featureExpression += "}";
+
+    std::vector<Float_t> featureValues(features.size(), 0.f);
+    TMVA::Reader reader("!Color:!Silent");
+    for (size_t i = 0; i < features.size(); ++i)
+        reader.AddVariable(features[i].c_str(), &featureValues[i]);
+
+    if (!reader.BookMVA(methodName.c_str(), weightsFile.c_str()))
+        throw std::runtime_error("Cannot load TMVA model: " + weightsFile);
+
+    using InputRow = std::pair<ULong64_t, ROOT::VecOps::RVec<float>>;
+    auto predictionDf = realDataDf
+        .Define("RealDataBdtFeatures", featureExpression)
+        .Define("RealDataBdtRow", [](ULong64_t index, const ROOT::VecOps::RVec<float>& values) {
+            return InputRow{index, values};
+        }, {"Index", "RealDataBdtFeatures"});
+
+    auto rows = predictionDf.Take<InputRow>("RealDataBdtRow");
+    const auto& inputRows = *rows; // Executes the lazy graph once.
+
+    std::vector<RealDataBdtPrediction> result;
+    result.reserve(inputRows.size());
+
+    for (const auto& row : inputRows) {
+        bool valid = true;
+        for (size_t i = 0; i < features.size(); ++i) {
+            featureValues[i] = row.second[i];
+            valid &= std::isfinite(featureValues[i]);
+        }
+        if (!valid) continue;
+
+        const Float_t score = reader.EvaluateMVA(methodName.c_str());
+        if (!std::isfinite(score)) continue;
+        result.push_back({row.first, score, score >= decisionThreshold});
+    }
+
+    return result;
+}
+
 void evaluateDrellYanBdt(
     const std::vector<std::string>& features,
     ROOT::RDF::RNode testingDf,
+    ROOT::RDF::RNode realDataDf,
     const std::string& weightsFile,
     const std::string& methodName,
     double decisionThreshold,
@@ -1266,7 +1326,7 @@ void evaluateDrellYanBdt(
     if (!evaluationDf.HasColumn("IsDyProcess"))
         throw std::runtime_error("Testing dataframe is missing IsDyProcess");
 
-    BdtPredictionResult prediction = RunDrellYanBdtPrediction(features, evaluationDf, weightsFile, methodName, decisionThreshold);
+    BdtPredictionResult prediction = RunMcDrellYanBdtPrediction(features, evaluationDf, weightsFile, methodName, decisionThreshold);
 
     std::cout << "Evaluated events: " << prediction.evaluatedEvents << "\n";
     std::cout << "Model-selected DY events: " << prediction.selectedIndices->size() << "\n";
@@ -1356,9 +1416,25 @@ void evaluateDrellYanBdt(
     // CreateBdtFalseHistograms(evaluationDf, prediction.rejectedIndices, prediction.trueNegative, prediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
     // CreateBdtDifferenceHistograms(histogramDf, prediction.selectedIndices);
     // CreateBackgroundPredictionHistograms(testingDf, prediction.selectedIndices, backgroundFilesPaths);
-    CreateBdtPositiveSourceHistograms(evaluationDf, prediction.selectedIndices, backgroundFilesPaths);
-    CreateBdtRejectedSourceHistograms(evaluationDf, prediction.rejectedIndices, backgroundFilesPaths);
+    // CreateBdtPositiveSourceHistograms(evaluationDf, prediction.selectedIndices, backgroundFilesPaths);
+    // CreateBdtRejectedSourceHistograms(evaluationDf, prediction.rejectedIndices, backgroundFilesPaths);
     // CreateEvaluationDataHistograms(testingDf);
+
+    //REAL DATA PREDICTION
+    auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realDataDf, weightsFile, methodName, decisionThreshold);
+
+    {
+        const size_t total = realDataPrediction.size();
+        size_t selected = 0;
+        for (const auto& event : realDataPrediction) {
+            selected += event.predictedDy;
+        }
+        logLine("\n--- REAL-DATA BDT PREDICTION ---");
+        logValue("Real-data events predicted", total);
+        logValue("Real-data predicted DY", selected);
+        }
+    }
+    
 
     logElapsedTime("BDT evaluation COMPLETE");
     std::cout << "evaluateDrellYanBdt END\n";
