@@ -33,6 +33,10 @@
 #include <TSystem.h>
 #include <unordered_set>
 #include <random>
+// Functions implemented in ML.C, after #include "ml_dy.C".
+ULong64_t mix64(ULong64_t x);
+ROOT::RDF::RNode BDT_HLT_IsoMu24_pT_n_filter(ROOT::RDF::RNode df);
+ROOT::RDF::RNode makeMuonAndDimuonKinematicsDataFrame(ROOT::RDF::RNode df);
 
 struct BdtHistory {
     std::vector<double> accuracy;
@@ -1263,6 +1267,228 @@ std::vector<RealDataBdtPrediction> RunRealDataDrellYanBdtPrediction(
     return result;
 }
 
+
+void CreateBdtRealDataMcComparisonHistograms(
+    ROOT::RDF::RNode mcDf,
+    ROOT::RDF::RNode realDf,
+    const BdtPredictionResult& mcPrediction,
+    const std::vector<RealDataBdtPrediction>& realPrediction,
+    const std::vector<double>& mcScales,
+    const std::vector<std::string>& backgroundFilesPaths){
+    using IndexSet = std::unordered_set<ULong64_t>;
+    using Hist = ROOT::RDF::RResultPtr<TH1D>;
+    struct Spec { const char* name; const char* axis; double min, max; };
+    struct Plot {
+        std::string name, title, axis;
+        Hist data;
+        std::vector<Hist> mc;
+    };
+
+    const std::vector<Spec> specs = {
+        {"LeadingMuon_pt",     "Leading muon p_{T} [GeV]",       0, 140},
+        {"LeadingMuon_eta",    "Leading muon #eta",           -2.4, 2.4},
+        {"LeadingMuon_phi",    "Leading muon #phi [rad]",     -3.2, 3.2},
+        {"SubleadingMuon_pt",  "Subleading muon p_{T} [GeV]",    0, 140},
+        {"SubleadingMuon_eta", "Subleading muon #eta",        -2.4, 2.4},
+        {"SubleadingMuon_phi", "Subleading muon #phi [rad]",  -3.2, 3.2},
+        {"Dimuon_mass",        "Dimuon mass [GeV]",             50, 150},
+        {"Dimuon_pt",          "Dimuon p_{T} [GeV]",              0, 200},
+        {"Dimuon_rapidity",    "Dimuon rapidity",                -3, 3},
+        {"Dimuon_phi",         "Dimuon #phi [rad]",            -3.2, 3.2}
+    };
+
+    std::vector<std::string> sourceNames{"main_dy"};
+    for (std::string path : backgroundFilesPaths) {
+        const size_t slash = path.find_last_of("/\\");
+        if (slash != std::string::npos) path.erase(0, slash + 1);
+        const std::string suffix = "_xrootd_files.txt";
+        if (path.size() >= suffix.size() &&
+            path.compare(path.size() - suffix.size(), suffix.size(), suffix) == 0)
+            path.erase(path.size() - suffix.size());
+        sourceNames.push_back(path);
+    }
+    if (mcScales.size() != sourceNames.size())
+        throw std::runtime_error("MC comparison scales do not match the source list");
+
+    // Category 0 = predicted non-DY; category 1 = predicted DY.
+    std::vector<std::shared_ptr<IndexSet>> mcSets{
+        std::make_shared<IndexSet>(mcPrediction.rejectedIndices.begin(), mcPrediction.rejectedIndices.end()),
+        mcPrediction.selectedIndices
+    };
+    std::vector<std::shared_ptr<IndexSet>> realSets{
+        std::make_shared<IndexSet>(), std::make_shared<IndexSet>()
+    };
+    for (const auto& event : realPrediction)
+        realSets[event.predictedDy ? 1 : 0]->insert(event.index);
+
+    auto prepare = [](ROOT::RDF::RNode df) {
+        auto valid = df.Filter([](const ROOT::VecOps::RVec<float>& pt,
+                                 const ROOT::VecOps::RVec<float>& eta,
+                                 const ROOT::VecOps::RVec<float>& phi) {
+            return pt.size() >= 2 && pt.size() == eta.size() && pt.size() == phi.size();
+        }, {"Muon_pt", "Muon_eta", "Muon_phi"});
+
+        // Use the same comparison preselection for every MC source and real data.
+        return makeMuonAndDimuonKinematicsDataFrame(BDT_HLT_IsoMu24_pT_n_filter(valid));
+    };
+
+    auto mc = prepare(mcDf).Define("BdtComparisonWeight",
+        [mcScales](Float_t weight, UInt_t source) {
+            return static_cast<double>(weight) * mcScales.at(source - 1);
+        }, {"genWeight", "FILE_CLASSIFICATOR"})
+        .Filter([](double weight) { return std::isfinite(weight); }, {"BdtComparisonWeight"});
+    auto data = prepare(realDf);
+
+    auto select = [](ROOT::RDF::RNode df, std::shared_ptr<IndexSet> indices) {
+        return df.Filter([indices](ULong64_t index) {
+            return indices->find(index) != indices->end();
+        }, {"Index"});
+    };
+
+    std::vector<Plot> plots;
+    std::vector<ROOT::RDF::RResultHandle> handles;
+    for (int category = 0; category < 2; ++category) {
+        auto selectedMc = select(mc, mcSets[category]);
+        auto selectedData = select(data, realSets[category]);
+        const std::string prefix = category ? "bdt_positive_comparison_" : "bdt_negative_comparison_";
+        const std::string title = category ? "BDT predicted DY" : "BDT predicted non-DY";
+
+        for (const auto& spec : specs) {
+            const std::string name = prefix + spec.name;
+            plots.push_back({name, title, spec.axis,
+                selectedData.Histo1D({(name + "_data").c_str(), "", 100, spec.min, spec.max}, spec.name), {}});
+            auto& plot = plots.back();
+            handles.emplace_back(plot.data);
+
+            for (size_t source = 0; source < sourceNames.size(); ++source) {
+                auto sourceDf = selectedMc.Filter(
+                    [id = static_cast<UInt_t>(source + 1)](UInt_t value) { return value == id; },
+                    {"FILE_CLASSIFICATOR"});
+                const std::string histName = name + "_mc_" + std::to_string(source);
+                plot.mc.emplace_back(sourceDf.Histo1D(
+                    {histName.c_str(), "", 100, spec.min, spec.max}, spec.name, "BdtComparisonWeight"));
+                handles.emplace_back(plot.mc.back());
+            }
+        }
+    }
+
+    ROOT::RDF::RunGraphs(handles);
+    gSystem->mkdir("Images", true);
+
+    for (auto& plot : plots) {
+        TH1D& observed = *plot.data;
+        observed.SetStats(false);
+        observed.SetMarkerStyle(20);
+        observed.SetMarkerSize(0.7);
+        observed.SetLineColor(kBlack);
+        observed.SetMarkerColor(kBlack);
+
+        TH1D total(observed);
+        total.SetName((plot.name + "_total").c_str());
+        total.SetDirectory(nullptr);
+        total.Reset();
+
+        bool negativeBins = false;
+        for (auto& hist : plot.mc) {
+            total.Add(hist.GetPtr());
+            negativeBins |= hist->GetMinimum() < 0.0;
+        }
+
+        TCanvas canvas((plot.name + "_canvas").c_str(), "", 1200, 1000);
+        TPad upper((plot.name + "_upper").c_str(), "", 0, 0.30, 1, 1);
+        TPad lower((plot.name + "_lower").c_str(), "", 0, 0, 1, 0.30);
+        for (TPad* pad : {&upper, &lower}) {
+            pad->SetLeftMargin(0.12); pad->SetRightMargin(0.25);
+            pad->SetTicks(1, 1);
+        }
+        upper.SetTopMargin(0.07); upper.SetBottomMargin(0.02);
+        lower.SetTopMargin(0.03); lower.SetBottomMargin(0.34);
+        upper.Draw(); lower.Draw(); upper.cd();
+
+        THStack stack((plot.name + "_stack").c_str(), (plot.title + ";;Events / bin").c_str());
+        TLegend legend(0.77, 0.43, 0.99, 0.92);
+        legend.SetBorderSize(0); legend.SetFillStyle(0); legend.SetTextSize(0.028);
+
+        double minY = 0.0, maxY = 1.0;
+        const int paletteSize = std::max(1, TColor::GetNumberOfColors());
+        for (size_t source = 0; source < plot.mc.size(); ++source) {
+            TH1D* hist = plot.mc[source].GetPtr();
+            const int color = TColor::GetColorPalette(
+                static_cast<int>(source * (paletteSize - 1) / std::max<size_t>(1, plot.mc.size() - 1)));
+            hist->SetStats(false); hist->SetLineColor(color); hist->SetLineWidth(2);
+            hist->SetFillColor(color); hist->SetFillStyle(negativeBins ? 0 : 1001);
+            stack.Add(hist);
+            legend.AddEntry(hist, sourceNames[source].c_str(), negativeBins ? "l" : "f");
+            if (negativeBins) {
+                minY = std::min(minY, hist->GetMinimum());
+                maxY = std::max(maxY, hist->GetMaximum());
+            }
+        }
+
+        for (int bin = 1; bin <= observed.GetNbinsX(); ++bin) {
+            minY = std::min(minY, total.GetBinContent(bin) - total.GetBinError(bin));
+            maxY = std::max({maxY, observed.GetBinContent(bin) + observed.GetBinError(bin),
+                            total.GetBinContent(bin) + total.GetBinError(bin)});
+        }
+        stack.SetMinimum(minY < 0.0 ? minY * 1.2 : 0.0);
+        stack.SetMaximum(maxY * 1.25);
+        stack.Draw(negativeBins ? "NOSTACK HIST" : "HIST");
+        stack.GetXaxis()->SetLabelSize(0);
+        stack.GetXaxis()->SetTitleSize(0);
+        stack.GetYaxis()->SetTitleOffset(1.35);
+
+        total.SetFillStyle(0); total.SetLineColor(kBlack); total.SetLineWidth(2);
+        total.Draw("HIST SAME");
+        observed.Draw("E1 SAME");
+        legend.AddEntry(&total, "Total MC", "l");
+        legend.AddEntry(&observed, "Real data", "lep");
+        legend.Draw();
+
+        lower.cd();
+        TGraphErrors ratio;
+        ratio.SetName((plot.name + "_ratio").c_str());
+        ratio.SetMarkerStyle(20); ratio.SetMarkerSize(0.6);
+        ratio.SetLineColor(kBlack); ratio.SetMarkerColor(kBlack);
+        double minRatio = 0.0, maxRatio = 2.0;
+
+        for (int bin = 1; bin <= observed.GetNbinsX(); ++bin) {
+            const double d = observed.GetBinContent(bin), m = total.GetBinContent(bin);
+            if (d <= 0.0) continue;
+            const double value = m / d;
+            const double error = std::hypot(total.GetBinError(bin) / d,
+                                           m * observed.GetBinError(bin) / (d * d));
+            const int point = ratio.GetN();
+            ratio.SetPoint(point, observed.GetBinCenter(bin), value);
+            ratio.SetPointError(point, 0.0, error);
+            minRatio = std::min(minRatio, value - error);
+            maxRatio = std::max(maxRatio, value + error);
+        }
+
+        TH1D frame(total);
+        frame.SetName((plot.name + "_ratio_frame").c_str());
+        frame.SetDirectory(nullptr); frame.Reset(); frame.SetStats(false);
+        frame.SetTitle((";" + plot.axis + ";MC / Data").c_str());
+        frame.SetMinimum(minRatio < 0.0 ? minRatio * 1.1 : 0.0);
+        frame.SetMaximum(maxRatio * 1.1);
+        frame.GetYaxis()->SetNdivisions(505);
+        frame.GetYaxis()->SetTitleSize(0.10); frame.GetYaxis()->SetTitleOffset(0.55);
+        frame.GetYaxis()->SetLabelSize(0.085);
+        frame.GetXaxis()->SetTitleSize(0.11); frame.GetXaxis()->SetLabelSize(0.095);
+        frame.Draw("AXIS");
+
+        TLine unity(frame.GetXaxis()->GetXmin(), 1.0, frame.GetXaxis()->GetXmax(), 1.0);
+        unity.SetLineStyle(2); unity.SetLineColor(kGray + 2); unity.Draw();
+        ratio.Draw("P SAME");
+
+        const std::string file = "Images/" + plot.name + ".png";
+        canvas.SaveAs(file.c_str());
+        logValue("BDT comparison saved", file);
+        logValue(plot.name + " data yield", observed.Integral(0, observed.GetNbinsX() + 1));
+        logValue(plot.name + " MC yield", total.Integral(0, total.GetNbinsX() + 1));
+        if (negativeBins) logLine(plot.name + ": negative MC bins; sources drawn as unstacked lines.");
+    }
+}
+
 void evaluateDrellYanBdt(
     const std::vector<std::string>& features,
     ROOT::RDF::RNode testingDf,
@@ -1274,7 +1500,8 @@ void evaluateDrellYanBdt(
     double histogramUsagePercentage,
     double falseHistogramUsagePercentage,
     unsigned randomSeed,
-    const std::vector<std::string>& backgroundFilesPaths)
+    const std::vector<std::string>& backgroundFilesPaths,
+    const std::vector<double>& mcScales)
 {
     std::cout << "evaluateDrellYanBdt Start\n";
     std::cout << "Features: " << features.size() << "\n";
@@ -1284,8 +1511,21 @@ void evaluateDrellYanBdt(
     std::cout << "Evaluation usage: " << evaluationUsagePercentage << "%\n";
     std::cout << "Histogram usage: " << histogramUsagePercentage << "%\n";
 
-    if (evaluationUsagePercentage <= 0.0 || evaluationUsagePercentage > 100.0)
+    if (!std::isfinite(evaluationUsagePercentage) || evaluationUsagePercentage <= 0.0 || evaluationUsagePercentage > 100.0)
         throw std::runtime_error("Evaluation usage percentage must be in (0, 100]");
+
+    const ULong64_t keepThreshold =
+        static_cast<ULong64_t>(std::llround(evaluationUsagePercentage * 100.0));
+    if (keepThreshold == 0)
+        throw std::runtime_error("Evaluation usage percentage rounds to zero");
+
+    const auto useEvaluationEvent = [keepThreshold, randomSeed](ULong64_t index) {
+        return mix64(index ^ static_cast<ULong64_t>(randomSeed) ^ 0xd1b54a32d192ed03ULL)
+            % 10000ULL < keepThreshold;
+    };
+
+    auto evaluationDf = testingDf.Filter(useEvaluationEvent, {"Index"});
+    auto realEvaluationDf = realDataDf.Filter(useEvaluationEvent, {"Index"});
 
     if (histogramUsagePercentage <= 0.0 || histogramUsagePercentage > 100.0)
         throw std::runtime_error("Histogram usage percentage must be in (0, 100]");
@@ -1310,14 +1550,6 @@ void evaluateDrellYanBdt(
     logValue("Testing dataframe DY events", *testingDyCount);
     logValue("Testing dataframe DY [%]", dyPercentage);
 
-
-    const ULong64_t keepThreshold =
-        static_cast<ULong64_t>(std::llround(evaluationUsagePercentage * 100.0));
-
-    auto evaluationDf = testingDf.Filter(
-        [keepThreshold, randomSeed](ULong64_t index) {
-            return (index * 7919ULL + randomSeed) % 10000ULL < keepThreshold;
-        }, {"Index"});
 
     for (const auto& feature : features)
         if (!evaluationDf.HasColumn(feature))
@@ -1421,20 +1653,20 @@ void evaluateDrellYanBdt(
     // CreateEvaluationDataHistograms(testingDf);
 
     //REAL DATA PREDICTION
-    auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realDataDf, weightsFile, methodName, decisionThreshold);
+    auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realEvaluationDf, weightsFile, methodName, decisionThreshold);
+
+    CreateBdtRealDataMcComparisonHistograms(evaluationDf, realEvaluationDf, prediction, realDataPrediction, mcScales, backgroundFilesPaths);
 
     {
         const size_t total = realDataPrediction.size();
         size_t selected = 0;
-        for (const auto& event : realDataPrediction) {
-            selected += event.predictedDy;
-        }
+        for (const auto& event : realDataPrediction) selected += event.predictedDy;
+
         logLine("\n--- REAL-DATA BDT PREDICTION ---");
         logValue("Real-data events predicted", total);
         logValue("Real-data predicted DY", selected);
-        }
+        logValue("Real-data predicted non-DY", total - selected);
     }
-    
 
     logElapsedTime("BDT evaluation COMPLETE");
     std::cout << "evaluateDrellYanBdt END\n";

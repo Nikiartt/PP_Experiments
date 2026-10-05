@@ -12,7 +12,7 @@
 #include <iostream>
 #include <unordered_set>
 #include <iomanip>
-
+#include <set>
 
 static const std::string LOG_FILE = "log.txt";
 using Clock = std::chrono::steady_clock;
@@ -494,6 +494,155 @@ std::vector<std::string> getBdtFeatureNames(size_t maxMuons) {
     return f;
 }
 
+
+//REAL DATA LUMINOSITY NORMALIZATION FOR PROPER COMPARISON START
+using LumiRange = std::pair<unsigned, unsigned>;
+using GoodLumiMap = std::map<unsigned, std::vector<LumiRange>>;
+using RunLumiKey = std::pair<UInt_t, UInt_t>;
+using LumiTable = std::map<RunLumiKey, double>;
+
+ROOT::RDF::RNode filterLuminosity(ROOT::RDF::RNode df, const std::string& fileName)
+{
+    std::ifstream input(fileName);
+    if (!input) throw std::runtime_error("Cannot open certification JSON: " + fileName);
+    const std::string text((std::istreambuf_iterator<char>(input)), {});
+    auto good = std::make_shared<GoodLumiMap>();
+    const std::regex rangeRegex(R"(\[(\d+)\s*,\s*(\d+)\])");
+
+    size_t pos = 0;
+    while ((pos = text.find('"', pos)) != std::string::npos) {
+        const size_t end = text.find('"', pos + 1);
+        if (end == std::string::npos) throw std::runtime_error("Invalid certification JSON");
+        const unsigned run = std::stoul(text.substr(pos + 1, end - pos - 1));
+        pos = text.find('[', end);
+        if (pos == std::string::npos) throw std::runtime_error("Missing JSON luminosity ranges");
+
+        const size_t start = pos;
+        int depth = 0;
+        do {
+            if (text[pos] == '[') ++depth;
+            if (text[pos] == ']') --depth;
+            ++pos;
+        } while (depth > 0 && pos < text.size());
+        if (depth != 0) throw std::runtime_error("Unclosed JSON luminosity ranges");
+
+        const std::string block = text.substr(start, pos - start);
+        for (std::sregex_iterator it(block.begin(), block.end(), rangeRegex), last; it != last; ++it)
+            (*good)[run].emplace_back(std::stoul((*it)[1]), std::stoul((*it)[2]));
+    }
+
+    if (good->empty()) throw std::runtime_error("No certified runs found in: " + fileName);
+    logValue("Good JSON run count", good->size());
+
+    return df.Filter([good](UInt_t run, UInt_t lumi) {
+        const auto it = good->find(run);
+        if (it == good->end()) return false;
+        for (const auto& range : it->second)
+            if (lumi >= range.first && lumi <= range.second) return true;
+        return false;
+    }, {"run", "luminosityBlock"});
+}
+
+std::vector<std::string> splitCsv(const std::string& line)
+{
+    std::vector<std::string> fields;
+    std::stringstream stream(line);
+    std::string field;
+    while (std::getline(stream, field, ',')) fields.push_back(field);
+    return fields;
+}
+
+UInt_t parseCsvId(const std::string& value)
+{
+    return static_cast<UInt_t>(std::stoul(value.substr(0, value.find(':'))));
+}
+
+LumiTable loadRecordedLuminosity(const std::string& path)
+{
+    std::ifstream input(path);
+    if (!input) throw std::runtime_error("Cannot open luminosity CSV: " + path);
+
+    LumiTable table;
+    std::string line;
+    size_t runCol = 0, lumiCol = 0, recordedCol = 0;
+    bool headerFound = false;
+
+    while (std::getline(input, line)) {
+        if (line.rfind("#run:fill", 0) == 0) {
+            const auto columns = splitCsv(line.substr(1));
+            auto columnIndex = [&columns](const std::string& name) {
+                const auto it = std::find(columns.begin(), columns.end(), name);
+                if (it == columns.end()) throw std::runtime_error("Missing CSV column: " + name);
+                return static_cast<size_t>(it - columns.begin());
+            };
+            runCol = columnIndex("run:fill");
+            lumiCol = columnIndex("ls");
+            recordedCol = columnIndex("recorded(/fb)");
+            headerFound = true;
+            continue;
+        }
+
+        if (line.empty() || line.front() == '#') continue;
+        if (!headerFound) throw std::runtime_error("Luminosity CSV header was not found");
+        const auto fields = splitCsv(line);
+        if (fields.size() <= std::max({runCol, lumiCol, recordedCol}))
+            throw std::runtime_error("Incomplete luminosity CSV row");
+
+        table[{parseCsvId(fields[runCol]), parseCsvId(fields[lumiCol])}] = std::stod(fields[recordedCol]);
+    }
+
+    if (table.empty()) throw std::runtime_error("No luminosity values found in: " + path);
+    return table;
+}
+
+double calculateIntegratedLuminosityFb(
+    const std::vector<std::string>& realFiles,
+    const std::string& jsonPath, const std::string& luminosityCsvPath)
+{
+    ROOT::RDataFrame lumiDf("LuminosityBlocks", realFiles);
+    auto keys = filterLuminosity(lumiDf, jsonPath)
+        .Define("runLumiKey", [](UInt_t run, UInt_t lumi) {
+            return (static_cast<ULong64_t>(run) << 32) | lumi;
+        }, {"run", "luminosityBlock"})
+        .Take<ULong64_t>("runLumiKey");
+
+    const std::set<ULong64_t> uniqueKeys(keys->begin(), keys->end());
+    if (uniqueKeys.empty()) throw std::runtime_error("No certified luminosity blocks found");
+
+    const auto table = loadRecordedLuminosity(luminosityCsvPath);
+    double luminosityFb = 0.0;
+    for (ULong64_t key : uniqueKeys) {
+        const RunLumiKey runLumi{static_cast<UInt_t>(key >> 32), static_cast<UInt_t>(key)};
+        const auto it = table.find(runLumi);
+        if (it == table.end())
+            throw std::runtime_error("Missing luminosity for run " + std::to_string(runLumi.first) +
+                                     ", luminosity block " + std::to_string(runLumi.second));
+        luminosityFb += it->second;
+    }
+
+    logValue("Unique certified luminosity blocks", uniqueKeys.size());
+    logValue("Integrated luminosity [fb^-1]", luminosityFb);
+    return luminosityFb;
+}
+
+double calculateNormalization(
+    const std::string& sampleName, const std::vector<std::string>& files,
+    double crossSectionPb, double integratedLuminosityFb)
+{
+    ROOT::RDataFrame runsDf("Runs", files);
+    const double sumGenWeight = *runsDf.Sum<double>("genEventSumw");
+    if (!std::isfinite(sumGenWeight) || sumGenWeight == 0.0)
+        throw std::runtime_error("Invalid genEventSumw for sample: " + sampleName);
+
+    const double scale = crossSectionPb * integratedLuminosityFb * 1000.0 / sumGenWeight;
+    logValue(sampleName + " cross section [pb]", crossSectionPb);
+    logValue(sampleName + " sum gen weights", sumGenWeight);
+    logValue(sampleName + " normalization", scale);
+    return scale;
+}
+//REAL DATA LUMINOSITY NORMALIZATION FOR PROPER COMPARISON END
+
+//
 // docker desktop start
 // docker stats cmscloud
 //docker stop cmscloud OR //exit
@@ -527,7 +676,10 @@ void MlRun()
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
     const std::string RealDataFilesPath = "files-recid-30563.txt"; //REAL CMS DATA https://opendata.cern.ch/record/30563, Goes directly into evaluation
-    const double RealDataUsagePercentage = 1.00; 
+    const size_t DevelopmentRealDataFiles = 4;
+    // const double RealDataUsagePercentage = 1.00; 
+    const std::string JsonLuminosityPath = "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON_MuonPhys.txt";
+    const std::string LuminosityCsvPath = "Run2016H_MuonPhys_lumibyls.csv";
     
     //Parameters adjustment
     //START LOG 26/27+-
@@ -575,7 +727,10 @@ void MlRun()
     logValue("Training fraction", trainingFraction);
     logValue("Testing fraction", 1.0 - trainingFraction);
     logValue("Development mode", DevelopmentMode);
-    if (DevelopmentMode) logValue("Development files per sample", DevelopmentFilesPerSample);
+    if (DevelopmentMode) {
+        logValue("Development files per MC sample", DevelopmentFilesPerSample);
+        logValue("Development real-data files", DevelopmentRealDataFiles);
+    }
     logValue("Training threads", numberOfThreads);
     logValue("Dataset usage [%]", DatasetUsagePercentage);
     logLine("[BDT model parameters]");
@@ -588,53 +743,15 @@ void MlRun()
     // if (!UsePreparedData) {
     logLine("--- CREATE TRAINING AND TESTING DATA ---");
 
-    // const auto dyMainFiles = loadFileList(DyMainFilesPath, DevelopmentMode,DevelopmentFilesPerSample);
-
-    // std::vector<std::string> bgFiles;
-    // for (const std::string& fileList : BackgroundFilesPaths) {
-        // const auto files = loadFileList(fileList, DevelopmentMode, DevelopmentFilesPerSample);
-        // bgFiles.insert(bgFiles.end(), files.begin(), files.end());
-    // }
-    // std::vector<std::string> allFiles = dyMainFiles;
-    // allFiles.insert(allFiles.end(), bgFiles.begin(), bgFiles.end());
-
-    // ROOT::EnableImplicitMT(numberOfThreads);//Enabling ROOT parallelism So now dont refer to  rdfentry_ !!!
-    // ROOT::RDataFrame dfMainAndBg("Events", allFiles);
-
-    // const std::unordered_set<std::string> dyMainFileSet(//Creating a set containing the DY input filenames
-    //     dyMainFiles.begin(),
-    //     dyMainFiles.end()
-    // );
-
-    // auto dfMarkedMainEvents = dfMainAndBg
-    //     .DefinePerSample( // DefinePerSample is evaluated for the input sample/file. (not simple Define)
-    //         "SourceFileId", // Creating SourceFileId
-    //         [allFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
-    //             for (UInt_t i = 0; i < allFiles.size(); ++i) {//Finding which file this sample belongs to
-    //                 if (info.Contains(allFiles[i]))//info contains information about the sample currently being processed
-    //                     return i;
-    //             }
-    //             throw std::runtime_error("Cannot determine source file");
-    //         }
-    //     )
-    //     .DefinePerSample(//generates a Boolean
-    //         "IsMainDyFile",
-    //         [dyMainFileSet](unsigned int, const ROOT::RDF::RSampleInfo& info) {
-    //             for (const auto& file : dyMainFileSet) {
-    //                 if (info.Contains(file))
-    //                     return true;
-    //             }
-    //             return false;
-    //         }
-    //     );
-
     const auto dyMainFiles = loadFileList(DyMainFilesPath, DevelopmentMode, DevelopmentFilesPerSample);
 
     std::vector<std::string> allFiles = dyMainFiles;
     std::vector<UInt_t> allFileClasses(dyMainFiles.size(), 1);
+    std::vector<std::vector<std::string>> mcFilesBySource{dyMainFiles};
 
     for (size_t i = 0; i < BackgroundFilesPaths.size(); ++i) {
         const auto files = loadFileList(BackgroundFilesPaths[i], DevelopmentMode, DevelopmentFilesPerSample);
+        mcFilesBySource.push_back(files);
         allFiles.insert(allFiles.end(), files.begin(), files.end());
         allFileClasses.insert(allFileClasses.end(), files.size(), static_cast<UInt_t>(i + 2));
     }
@@ -759,13 +876,41 @@ void MlRun()
     // );
     // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
 
-    //REAL DATA PREPARATION FOR EVALUATION
-    if (!std::isfinite(RealDataUsagePercentage) || RealDataUsagePercentage <= 0.0 || RealDataUsagePercentage > 100.0)
-        throw std::runtime_error("Real-data usage percentage must be in (0, 100]");
+    // Same cross sections and source order as the current comparisonAnalysis().
+    if (!std::isfinite(trainingFraction) || trainingFraction < 0.0 || trainingFraction >= 1.0)
+        throw std::runtime_error("Training fraction must be in [0, 1)");
+    if (!std::isfinite(EvaluationUsagePercentage) || EvaluationUsagePercentage <= 0.0 || EvaluationUsagePercentage > 100.0)
+        throw std::runtime_error("Evaluation usage percentage must be in (0, 100]");
 
-    const auto realDataFiles = loadFileList(RealDataFilesPath, DevelopmentMode, DevelopmentFilesPerSample);
+    // Match the exact testing fraction used by the existing Index % 100 split.
+    unsigned testingBuckets = 0;
+    for (unsigned bucket = 0; bucket < 100; ++bucket)
+        if (!(static_cast<double>(bucket) / 100.0 < trainingFraction)) ++testingBuckets;
+    if (testingBuckets == 0) throw std::runtime_error("The testing split retains no events");
+
+    const auto realDataFiles = loadFileList(RealDataFilesPath, DevelopmentMode, DevelopmentRealDataFiles);
+
+    // Calculate luminosity from all certified blocks in the loaded real-data files.
+    const double integratedLuminosityFb =
+        calculateIntegratedLuminosityFb(realDataFiles, JsonLuminosityPath, LuminosityCsvPath);
+
+    // Same cross sections and source order as comparisonAnalysis().
+    const std::vector<double> crossSectionsPb = {
+        5396.0, 687.1, 32.45, 32.51, 75.88, 27.56, 12.08, 54110.0, 2.529e6
+    }; // DY, ttbar, top-tW, antitop-tW, WW, WZ, ZZ, W+jets, QCD.
+
+    if (crossSectionsPb.size() != mcFilesBySource.size())
+        throw std::runtime_error("MC cross sections do not match the source list");
+
+    std::vector<double> mcScales;
+    for (size_t i = 0; i < mcFilesBySource.size(); ++i) {
+        const std::string name = i == 0 ? "main_dy" : BackgroundFilesPaths[i - 1];
+        mcScales.push_back(calculateNormalization(
+            name, mcFilesBySource[i], crossSectionsPb[i], integratedLuminosityFb));
+    }
+
+    // Prepare real data with the same retained fraction as the MC testing split.
     ROOT::RDataFrame realDataDf("Events", realDataFiles);
-
     auto realDataWithIndex = realDataDf
         .DefinePerSample("SourceFileId", [realDataFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
             for (UInt_t i = 0; i < realDataFiles.size(); ++i)
@@ -776,20 +921,21 @@ void MlRun()
             return makeEventIndex(fileId, run, lumi, event);
         }, {"SourceFileId", "run", "luminosityBlock", "event"});
 
-    const ULong64_t realDataKeepThreshold = static_cast<ULong64_t>(std::llround(RealDataUsagePercentage * 100.0));
-    auto realDataUsed = realDataWithIndex.Filter(
-        [realDataKeepThreshold, randomSeed](ULong64_t index) {
-            return (index * 7919ULL + randomSeed) % 10000ULL < realDataKeepThreshold;
+    auto realDataForTesting = realDataWithIndex.Filter(
+        [trainingFraction](ULong64_t index) {
+            return !(static_cast<double>(index % 100) / 100.0 < trainingFraction);
         }, {"Index"});
 
-    auto filteredRealData = BDT_HLT_IsoMu24_pT_n_filter(realDataUsed);
+    auto filteredRealData =
+        BDT_HLT_IsoMu24_pT_n_filter(filterLuminosity(realDataForTesting, JsonLuminosityPath));
     auto realBdtData = NormalizeToBdtDataFrame(filteredRealData, MaxMuons);
 
     if (realBdtData.features != features)
         throw std::runtime_error("Real-data and MC BDT feature lists differ");
 
     logValue("Real-data files", realDataFiles.size());
-    logValue("Real-data usage [%]", RealDataUsagePercentage);
+    logValue("Common testing fraction [%]", testingBuckets);
+    logValue("Common evaluation usage [%]", EvaluationUsagePercentage);
 
     //EVALUATION
     evaluateDrellYanBdt(
@@ -804,7 +950,8 @@ void MlRun()
         HistogramUsagePercentage,
         FalseHistogramUsagePercentage,
         randomSeed,
-        BackgroundFilesPaths
+        BackgroundFilesPaths,
+        mcScales
     );
 
     logElapsedTime("BDT evaluation END");
