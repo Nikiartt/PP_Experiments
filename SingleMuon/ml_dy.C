@@ -1468,8 +1468,8 @@ void CreateBdtRealDataMcComparisonHistograms(
         frame.SetName((plot.name + "_ratio_frame").c_str());
         frame.SetDirectory(nullptr); frame.Reset(); frame.SetStats(false);
         frame.SetTitle((";" + plot.axis + ";MC / Data").c_str());
-        frame.SetMinimum(minRatio < 0.0 ? minRatio * 1.1 : 0.0);
-        frame.SetMaximum(maxRatio * 1.1);
+        frame.SetMinimum(0.0);
+        frame.SetMaximum(2.5);
         frame.GetYaxis()->SetNdivisions(505);
         frame.GetYaxis()->SetTitleSize(0.10); frame.GetYaxis()->SetTitleOffset(0.55);
         frame.GetYaxis()->SetLabelSize(0.085);
@@ -1558,26 +1558,26 @@ void evaluateDrellYanBdt(
     if (!evaluationDf.HasColumn("IsDyProcess"))
         throw std::runtime_error("Testing dataframe is missing IsDyProcess");
 
-    BdtPredictionResult prediction = RunMcDrellYanBdtPrediction(features, evaluationDf, weightsFile, methodName, decisionThreshold);
+    BdtPredictionResult mcPrediction = RunMcDrellYanBdtPrediction(features, evaluationDf, weightsFile, methodName, decisionThreshold);
 
-    std::cout << "Evaluated events: " << prediction.evaluatedEvents << "\n";
-    std::cout << "Model-selected DY events: " << prediction.selectedIndices->size() << "\n";
-    std::cout << "TP=" << prediction.truePositive << " TN=" << prediction.trueNegative << " FP=" << prediction.falsePositive << " FN=" << prediction.falseNegative << "\n";
+    std::cout << "Evaluated events: " << mcPrediction.evaluatedEvents << "\n";
+    std::cout << "Model-selected DY events: " << mcPrediction.selectedIndices->size() << "\n";
+    std::cout << "TP=" << mcPrediction.truePositive << " TN=" << mcPrediction.trueNegative << " FP=" << mcPrediction.falsePositive << " FN=" << mcPrediction.falseNegative << "\n";
 
-    const double total = prediction.truePositive + prediction.trueNegative + prediction.falsePositive + prediction.falseNegative;
-    const double accuracy = total > 0.0 ? (prediction.truePositive + prediction.trueNegative) / total : 0.0;
-    const double precision = prediction.truePositive + prediction.falsePositive > 0.0 ? prediction.truePositive / (prediction.truePositive + prediction.falsePositive) : 0.0;
-    const double recall = prediction.truePositive + prediction.falseNegative > 0.0 ? prediction.truePositive / (prediction.truePositive + prediction.falseNegative) : 0.0;
-    const double specificity = prediction.trueNegative + prediction.falsePositive > 0.0 ? prediction.trueNegative / (prediction.trueNegative + prediction.falsePositive) : 0.0;
+    const double total = mcPrediction.truePositive + mcPrediction.trueNegative + mcPrediction.falsePositive + mcPrediction.falseNegative;
+    const double accuracy = total > 0.0 ? (mcPrediction.truePositive + mcPrediction.trueNegative) / total : 0.0;
+    const double precision = mcPrediction.truePositive + mcPrediction.falsePositive > 0.0 ? mcPrediction.truePositive / (mcPrediction.truePositive + mcPrediction.falsePositive) : 0.0;
+    const double recall = mcPrediction.truePositive + mcPrediction.falseNegative > 0.0 ? mcPrediction.truePositive / (mcPrediction.truePositive + mcPrediction.falseNegative) : 0.0;
+    const double specificity = mcPrediction.trueNegative + mcPrediction.falsePositive > 0.0 ? mcPrediction.trueNegative / (mcPrediction.trueNegative + mcPrediction.falsePositive) : 0.0;
     const double f1 = precision + recall > 0.0 ? 2.0 * precision * recall / (precision + recall) : 0.0;
-    const double significance = prediction.truePositive + prediction.falsePositive > 0.0 ? prediction.truePositive / std::sqrt(prediction.truePositive + prediction.falsePositive) : 0.0;
+    const double significance = mcPrediction.truePositive + mcPrediction.falsePositive > 0.0 ? mcPrediction.truePositive / std::sqrt(mcPrediction.truePositive + mcPrediction.falsePositive) : 0.0;
 
-    std::sort(prediction.scoredEvents.begin(), prediction.scoredEvents.end(),
+    std::sort(mcPrediction.scoredEvents.begin(), mcPrediction.scoredEvents.end(),
         [](const auto& a, const auto& b) { return a.first > b.first; });
 
     double totalSignal = 0.0, totalBackground = 0.0;
 
-    for (const auto& event : prediction.scoredEvents)
+    for (const auto& event : mcPrediction.scoredEvents)
         event.second ? ++totalSignal : ++totalBackground;
 
     double auc = std::numeric_limits<double>::quiet_NaN();
@@ -1586,13 +1586,13 @@ void evaluateDrellYanBdt(
         double cumulativeSignal = 0.0, cumulativeBackground = 0.0;
         double previousTpr = 0.0, previousFpr = 0.0, area = 0.0;
 
-        for (size_t i = 0; i < prediction.scoredEvents.size();) {
+        for (size_t i = 0; i < mcPrediction.scoredEvents.size();) {
             size_t j = i;
             double groupSignal = 0.0, groupBackground = 0.0;
 
-            while (j < prediction.scoredEvents.size() &&
-                   prediction.scoredEvents[j].first == prediction.scoredEvents[i].first) {
-                prediction.scoredEvents[j].second ? ++groupSignal : ++groupBackground;
+            while (j < mcPrediction.scoredEvents.size() &&
+                   mcPrediction.scoredEvents[j].first == mcPrediction.scoredEvents[i].first) {
+                mcPrediction.scoredEvents[j].second ? ++groupSignal : ++groupBackground;
                 ++j;
             }
 
@@ -1621,13 +1621,13 @@ void evaluateDrellYanBdt(
 
     logLine("");
     logLine("--- BDT evaluation ---");
-    logValue("Evaluated events", prediction.evaluatedEvents);
-    logValue("Model selected events", prediction.selectedIndices->size());
+    logValue("Evaluated events", mcPrediction.evaluatedEvents);
+    logValue("Model selected events", mcPrediction.selectedIndices->size());
     logValue("Decision threshold", decisionThreshold);
-    logValue("True positives", prediction.truePositive);
-    logValue("True negatives", prediction.trueNegative);
-    logValue("False positives", prediction.falsePositive);
-    logValue("False negatives", prediction.falseNegative);
+    logValue("True positives", mcPrediction.truePositive);
+    logValue("True negatives", mcPrediction.trueNegative);
+    logValue("False positives", mcPrediction.falsePositive);
+    logValue("False negatives", mcPrediction.falseNegative);
     logValue("Accuracy", accuracy);
     logValue("PRECISION", precision);
     logValue("Recall", recall);
@@ -1644,18 +1644,18 @@ void evaluateDrellYanBdt(
             return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
         }, {"Index"});
 
-    // CreateBdtPredictionHistograms(histogramDf, prediction.selectedIndices);//Model predicted as true DY
-    // CreateBdtFalseHistograms(evaluationDf, prediction.rejectedIndices, prediction.trueNegative, prediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
-    // CreateBdtDifferenceHistograms(histogramDf, prediction.selectedIndices);
-    // CreateBackgroundPredictionHistograms(testingDf, prediction.selectedIndices, backgroundFilesPaths);
-    // CreateBdtPositiveSourceHistograms(evaluationDf, prediction.selectedIndices, backgroundFilesPaths);
-    // CreateBdtRejectedSourceHistograms(evaluationDf, prediction.rejectedIndices, backgroundFilesPaths);
+    // CreateBdtPredictionHistograms(histogramDf, mcPrediction.selectedIndices);//Model predicted as true DY
+    // CreateBdtFalseHistograms(evaluationDf, mcPrediction.rejectedIndices, mcPrediction.trueNegative, mcPrediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
+    // CreateBdtDifferenceHistograms(histogramDf, mcPrediction.selectedIndices);
+    // CreateBackgroundPredictionHistograms(testingDf, mcPrediction.selectedIndices, backgroundFilesPaths);
+    // CreateBdtPositiveSourceHistograms(evaluationDf, mcPrediction.selectedIndices, backgroundFilesPaths);
+    // CreateBdtRejectedSourceHistograms(evaluationDf, mcPrediction.rejectedIndices, backgroundFilesPaths);
     // CreateEvaluationDataHistograms(testingDf);
 
     //REAL DATA PREDICTION
     auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realEvaluationDf, weightsFile, methodName, decisionThreshold);
 
-    CreateBdtRealDataMcComparisonHistograms(evaluationDf, realEvaluationDf, prediction, realDataPrediction, mcScales, backgroundFilesPaths);
+    CreateBdtRealDataMcComparisonHistograms(evaluationDf, realEvaluationDf, mcPrediction, realDataPrediction, mcScales, backgroundFilesPaths);
 
     {
         const size_t total = realDataPrediction.size();

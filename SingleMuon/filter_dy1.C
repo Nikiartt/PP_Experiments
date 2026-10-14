@@ -1582,7 +1582,7 @@ struct ComparisonPlot {
 
 // docker start -ai cmscloud
 // root -l -b -q -e '.L filter_dy1.C' -e 'comparisonAnalysis()'
-void comparisonAnalysis()
+void similar as in the comparisonAnalysis()
 {
     resetExecutionTimer();
     resetLog();
