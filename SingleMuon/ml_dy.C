@@ -33,6 +33,21 @@
 #include <TSystem.h>
 #include <unordered_set>
 #include <random>
+#include <torch/torch.h>
+#include <ATen/Parallel.h>
+#include <ROOT/RDFHelpers.hxx>
+#include <TROOT.h>
+#include <THStack.h>
+#include <TPad.h>
+#include <TLine.h>
+#include <TColor.h>
+#include <TGraphErrors.h>
+#include <functional>
+#include <tuple>
+#include <cstdint>
+#include <cctype>
+#include <torch/serialize.h>
+
 // Functions implemented in ML.C, after #include "ml_dy.C".
 ULong64_t mix64(ULong64_t x);
 ROOT::RDF::RNode BDT_HLT_IsoMu24_pT_n_filter(ROOT::RDF::RNode df);
@@ -73,36 +88,6 @@ BdtHistory calculateBdtHistory(TMVA::MethodBDT& bdt, TMVA::Types::ETreeType data
     }
     return result;
 }
-
-// void saveBdtHistory(TMVA::MethodBDT& bdt, const std::string& fileName)
-// {
-//     const auto h = calculateBdtHistory(bdt, TMVA::Types::kTesting);
-
-//     TFile file(fileName.c_str(), "RECREATE");
-//     gSystem->mkdir("Images", true);
-
-//     auto save = [&](const char* name, const char* title, const std::vector<double>& y) {
-//         TGraph graph(y.size());
-
-//         for (size_t i = 0; i < y.size(); ++i)
-//             graph.SetPoint(i, i + 1, y[i]);
-
-//         graph.SetName(name);
-//         graph.SetTitle(title);
-//         graph.SetLineWidth(2);
-//         graph.Write();
-
-//         TCanvas canvas(("c_" + std::string(name)).c_str(), "", 900, 650);
-//         graph.Draw("AL");
-//         canvas.SaveAs(("Images/" + std::string(name) + ".png").c_str());
-//     };
-
-//     save("precision", "Precision vs number of trees;Trees;Precision", h.precision);
-//     save("accuracy",  "Accuracy vs number of trees;Trees;Accuracy", h.accuracy);
-//     save("loss",      "Log-loss vs number of trees;Trees;Loss", h.loss);
-
-//     file.Write();
-// }
 
 
 void saveBdtHistory(TMVA::MethodBDT& bdt, const std::string& fileName)
@@ -455,9 +440,6 @@ std::string trainDrellYanBdt(
 
     return weightsFile;
 }
-
-
-
 
 struct BdtPredictionResult {
     double truePositive = 0.0, trueNegative = 0.0, falsePositive = 0.0, falseNegative = 0.0;
@@ -1644,13 +1626,13 @@ void evaluateDrellYanBdt(
             return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
         }, {"Index"});
 
-    // CreateBdtPredictionHistograms(histogramDf, mcPrediction.selectedIndices);//Model predicted as true DY
-    // CreateBdtFalseHistograms(evaluationDf, mcPrediction.rejectedIndices, mcPrediction.trueNegative, mcPrediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
-    // CreateBdtDifferenceHistograms(histogramDf, mcPrediction.selectedIndices);
-    // CreateBackgroundPredictionHistograms(testingDf, mcPrediction.selectedIndices, backgroundFilesPaths);
-    // CreateBdtPositiveSourceHistograms(evaluationDf, mcPrediction.selectedIndices, backgroundFilesPaths);
-    // CreateBdtRejectedSourceHistograms(evaluationDf, mcPrediction.rejectedIndices, backgroundFilesPaths);
-    // CreateEvaluationDataHistograms(testingDf);
+    CreateBdtPredictionHistograms(histogramDf, mcPrediction.selectedIndices);//Model predicted as true DY
+    CreateBdtFalseHistograms(evaluationDf, mcPrediction.rejectedIndices, mcPrediction.trueNegative, mcPrediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
+    CreateBdtDifferenceHistograms(histogramDf, mcPrediction.selectedIndices);
+    CreateBackgroundPredictionHistograms(testingDf, mcPrediction.selectedIndices, backgroundFilesPaths);
+    CreateBdtPositiveSourceHistograms(evaluationDf, mcPrediction.selectedIndices, backgroundFilesPaths);
+    CreateBdtRejectedSourceHistograms(evaluationDf, mcPrediction.rejectedIndices, backgroundFilesPaths);
+    CreateEvaluationDataHistograms(testingDf);
 
     //REAL DATA PREDICTION
     auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realEvaluationDf, weightsFile, methodName, decisionThreshold);

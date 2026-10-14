@@ -309,7 +309,7 @@ RNode fullMuonFilter(RNode df) {
 }
 
 //This is more smaller filter only for DY MC data set. We leave only triger pT an n: kadangi detektoriaus geometrija ir trigeris yra dalykai, kurie paveikia visus duomenis
-RNode BDT_HLT_IsoMu24_pT_n_filter(RNode df) {
+RNode HLT_IsoMu24_pT_n_filter(RNode df) {
     return df
         .Filter("HLT_IsoMu24", "HLT_IsoMu24")
         .Filter([](const RVec<float>& pt, const RVec<float>& eta) {
@@ -696,16 +696,15 @@ void MlRun()
     const bool DevelopmentMode = true;
     const size_t DevelopmentFilesPerSample = 2;
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
-    const double trainingFraction = 0.40;
+    const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 5.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
-    const double EvaluationUsagePercentage = 100.00;//Cuts if the data set is still so big and dont fit into memory.
+    const double DatasetUsagePercentage = 1.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
+    const double EvaluationUsagePercentage = 1.00;//Cuts if the data set is still so big and dont fit into memory.
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
     const std::string RealDataFilesPath = "files-recid-30563.txt"; //REAL CMS DATA https://opendata.cern.ch/record/30563, Goes directly into evaluation
     const size_t DevelopmentRealDataFiles = 4;
-    // const double RealDataUsagePercentage = 1.00; 
     const std::string JsonLuminosityPath = "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON_MuonPhys.txt";
     const std::string LuminosityCsvPath = "Run2016H_MuonPhys_lumibyls.csv";
     
@@ -723,9 +722,6 @@ void MlRun()
     //Log 38 tryed to reduce the minimumNodeSizePercent to 0.001 (from 0.005) No significant changes.
     //LOG 41 increased the training data to 10 percents and the precision dropped to 82 percents.
 
-    //Separate the main file since we have to separate these events in future from bg.
-    // const std::string DyMainFilesPath = "files-recid-30563.txt"; 
-
     const std::vector<std::string> BackgroundFilesPaths = {
         "Background_dataset_files/ttbar_xrootd_files.txt",
         "Background_dataset_files/single_top_tw_xrootd_files.txt",
@@ -740,6 +736,7 @@ void MlRun()
     const size_t MaxMuons = 2;//The data is cutted up to N muons so only 2 first muons will be slit into columns .
     const std::vector<std::string> features = getBdtFeatureNames(MaxMuons);
 
+    //BDT PARAMETERS
     const unsigned int numberOfTrees = 5;
     const unsigned int maximumDepth = 50;//A depth-three tree can represent interactions among several variables.
     const double minimumNodeSizePercent = 0.001;//This controls how small a tree node is allowed to become.
@@ -768,7 +765,6 @@ void MlRun()
     logValue("Shrinkage", shrinkage); logValue("Random seed", randomSeed); logValue("Decision threshold", decisionThreshold);
     logLine("------");
 
-    // if (!UsePreparedData) {
     logLine("--- CREATE TRAINING AND TESTING DATA ---");
 
     const auto dyMainFiles = loadFileList(DyMainFilesPath, DevelopmentMode, DevelopmentFilesPerSample);
@@ -818,7 +814,7 @@ void MlRun()
         {"SourceFileId", "run", "luminosityBlock", "event"}
     );
 
-    auto filteredDyEvents = BDT_HLT_IsoMu24_pT_n_filter(dfWithKey.Filter("FILE_CLASSIFICATOR == 1"));
+    auto filteredDyEvents = HLT_IsoMu24_pT_n_filter(dfWithKey.Filter("FILE_CLASSIFICATOR == 1"));
 
     auto passedDyKeysResult = filteredDyEvents.Take<ROOT::VecOps::RVec<ULong64_t>>("EventKeyParts");
 
@@ -883,26 +879,26 @@ void MlRun()
     logElapsedTime("Training/testing dataframes created");
 
         //Main and BG events will all the amount of muons pass in the training.
-    // const std::string weightsFile = trainDrellYanBdt(
-    //     features,
-    //     trainingNode,
-    //     testingNode,
-    //     "MlTemp/TMVA_DY_training.root",
-    //     "MlTemp/BDT_training_history.root",
-    //     "DrellYanClassification.weights.xml",
-    //     "BDTG",
-    //     "DY_BDT_dataset",
-    //     numberOfTrees,
-    //     maximumDepth,
-    //     minimumNodeSizePercent,
-    //     baggedSampleFraction,
-    //     numberOfCuts,
-    //     shrinkage,
-    //     randomSeed,
-    //     DatasetUsagePercentage,
-    //     numberOfThreads
-    // );
-    // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
+    const std::string weightsFile = trainDrellYanBdt(
+        features,
+        trainingNode,
+        testingNode,
+        "MlTemp/TMVA_DY_training.root",
+        "MlTemp/BDT_training_history.root",
+        "DrellYanClassification.weights.xml",
+        "BDTG",
+        "DY_BDT_dataset",
+        numberOfTrees,
+        maximumDepth,
+        minimumNodeSizePercent,
+        baggedSampleFraction,
+        numberOfCuts,
+        shrinkage,
+        randomSeed,
+        DatasetUsagePercentage,
+        numberOfThreads
+    );
+    logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
 
 
     //REAL DATA LOADING
@@ -939,7 +935,7 @@ void MlRun()
             return !(static_cast<double>(index % 100) / 100.0 < trainingFraction);
         }, {"Index"});
 
-    auto filteredRealData = BDT_HLT_IsoMu24_pT_n_filter(filterLuminosity(realDataForTesting, JsonLuminosityPath));
+    auto filteredRealData = HLT_IsoMu24_pT_n_filter(filterLuminosity(realDataForTesting, JsonLuminosityPath));
     auto realBdtData = NormalizeToBdtDataFrame(filteredRealData, MaxMuons);
 
     if (realBdtData.features != features)
