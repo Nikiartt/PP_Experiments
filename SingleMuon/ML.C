@@ -27,6 +27,24 @@ void logLine(const std::string& s) { std::ofstream(LOG_FILE, std::ios::app) << s
 template <typename T>
 void logValue(const std::string& n, const T& v) { std::ofstream(LOG_FILE, std::ios::app) << n << ": " << v << '\n'; }
 
+
+// From docker loading
+// real    1m54.871s
+// user    1m48.303s
+// sys     0m3.923s
+#if defined(__CLING__)
+R__ADD_INCLUDE_PATH(/opt/libtorch/include)
+R__ADD_INCLUDE_PATH(/opt/libtorch/include/torch/csrc/api/include)
+R__ADD_LIBRARY_PATH(/opt/libtorch/lib)
+R__LOAD_LIBRARY(/opt/libtorch/lib/libc10.so)
+R__LOAD_LIBRARY(/opt/libtorch/lib/libtorch_cpu.so)
+R__LOAD_LIBRARY(/opt/libtorch/lib/libtorch.so)
+#endif
+
+// After importing only separate libraries
+// real    1m40.241s
+// user    1m36.702s
+// sys     0m3.531s
 #include "ml_dy.C"
 
 std::vector<std::string> loadFileList(const std::string& fileListPath, bool devMode, size_t devNFiles)
@@ -668,6 +686,38 @@ double calculateNormalization(const std::string& sampleName, const std::vector<s
     return scale;
 }
 
+
+//PYTORCH INSTALATION
+// Check the environment
+// uname -m
+// root-config --version
+// root-config --cflags
+
+// Download and extract LibTorch
+// cd /work
+// curl -fL --retry 3 -o libtorch-2.6.0.zip \
+//   'https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.6.0%2Bcpu.zip' &&
+// python3 -m zipfile -e libtorch-2.6.0.zip /work
+
+// Verify the files
+// ls -l /work/libtorch/include/torch/csrc/api/include/torch/torch.h
+// ls -l /work/libtorch/lib/{libtorch.so,libtorch_cpu.so,libc10.so}
+// cat /work/libtorch/build-version
+
+// Configure the current terminal session
+// export LIBTORCH=/work/libtorch
+// export ROOT_INCLUDE_PATH="$LIBTORCH/include:$LIBTORCH/include/torch/csrc/api/include${ROOT_INCLUDE_PATH:+:$ROOT_INCLUDE_PATH}"
+// export LD_LIBRARY_PATH="$LIBTORCH/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+// Test LibTorch inside ROOT
+// root -l -b -q \
+//   -e 'if (gSystem->Load("libc10.so") < 0 || gSystem->Load("libtorch_cpu.so") < 0 || gSystem->Load("libtorch.so") < 0) gSystem->Exit(1);' \
+//   -e '#include <torch/torch.h>' \
+//   -e 'std::cout << torch::ones({2, 3}) << std::endl;'
+
+// docker exec -u root cmscloud sh -c 'mkdir -p /opt && cp -a /work/libtorch /opt/'
+
+
 //REAL DATA LUMINOSITY NORMALIZATION FOR PROPER COMPARISON END
 
 //
@@ -698,8 +748,8 @@ void MlRun()
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 1.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
-    const double EvaluationUsagePercentage = 1.00;//Cuts if the data set is still so big and dont fit into memory.
+    const double DatasetUsagePercentage = 5.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
+    const double EvaluationUsagePercentage = 10.00;//Cuts if the data set is still so big and dont fit into memory.
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -746,23 +796,38 @@ void MlRun()
     const unsigned int randomSeed = 1;
     const double decisionThreshold = 0.0;//decisionThreshold is the cutoff applied to the BDT output score to convert the continuous BDT prediction into a binary class.
 
-    logLine("--- ML RUN SETTINGS ---");
-    logValue("DyMainFilesPath", DyMainFilesPath);   
-    logValue("MaxMuons", MaxMuons);
-    logValue("Training fraction", trainingFraction);
-    logValue("Testing fraction", 1.0 - trainingFraction);
-    logValue("Development mode", DevelopmentMode);
-    if (DevelopmentMode) {
-        logValue("Development files per MC sample", DevelopmentFilesPerSample);
-        logValue("Development real-data files", DevelopmentRealDataFiles);
+    //NN PARAMETERS
+    const bool UseNeuralNetwork = true; //false runs the existing BDT workflow.
+    const std::vector<int64_t> nnHiddenLayers = {128, 64};
+    const unsigned int nnNumberOfEpochs = 5;
+    const int64_t nnBatchSize = 512;
+    const double nnLearningRate = 0.001;
+    const double nnWeightDecay = 0.0001;
+    const double nnDropoutProbability = 0.00;
+    const unsigned int nnRandomSeed = 1;
+    const double nnDecisionThreshold = 0.5;
+    const std::string nnModelFile = "MlTemp/DrellYan_NN.pt";
+
+    if (UseNeuralNetwork) {
+        logLine("[NN model parameters]");
+        logValue("Method", "LibTorch dense neural network"); logValue("Device", "CPU");
+        logValue("Optimizer", "Adam"); logValue("Loss", "BCEWithLogitsLoss");
+        logValue("Activation", "ReLU"); logValue("Input normalization", "Training mean and standard deviation");
+        logValue("Hidden layers", nnHiddenLayers.size());
+        for (size_t i = 0; i < nnHiddenLayers.size(); ++i)
+            logValue("Hidden layer " + std::to_string(i + 1) + " neurons", nnHiddenLayers[i]);
+        logValue("Epochs", nnNumberOfEpochs); logValue("Batch size", nnBatchSize);
+        logValue("Learning rate", nnLearningRate); logValue("Weight decay", nnWeightDecay);
+        logValue("Dropout probability", nnDropoutProbability); logValue("Random seed", nnRandomSeed);
+        logValue("Decision threshold", nnDecisionThreshold); logValue("Model file", nnModelFile);
+        logValue("Evaluation usage [%]", EvaluationUsagePercentage);
+    } else {
+        logLine("[BDT model parameters]");
+        logValue("Method", "BDTG"); logValue("Boost type", "Gradient"); logValue("Number of trees", numberOfTrees);
+        logValue("Maximum depth", maximumDepth); logValue("Minimum node size [%]", minimumNodeSizePercent);
+        logValue("Bagged sample fraction", baggedSampleFraction); logValue("Number of cuts", numberOfCuts);
+        logValue("Shrinkage", shrinkage); logValue("Random seed", randomSeed); logValue("Decision threshold", decisionThreshold);
     }
-    logValue("Training threads", numberOfThreads);
-    logValue("Dataset usage [%]", DatasetUsagePercentage);
-    logLine("[BDT model parameters]");
-    logValue("Method", "BDTG"); logValue("Boost type", "Gradient"); logValue("Number of trees", numberOfTrees);
-    logValue("Maximum depth", maximumDepth); logValue("Minimum node size [%]", minimumNodeSizePercent);
-    logValue("Bagged sample fraction", baggedSampleFraction); logValue("Number of cuts", numberOfCuts);
-    logValue("Shrinkage", shrinkage); logValue("Random seed", randomSeed); logValue("Decision threshold", decisionThreshold);
     logLine("------");
 
     logLine("--- CREATE TRAINING AND TESTING DATA ---");
@@ -878,29 +943,7 @@ void MlRun()
 
     logElapsedTime("Training/testing dataframes created");
 
-        //Main and BG events will all the amount of muons pass in the training.
-    const std::string weightsFile = trainDrellYanBdt(
-        features,
-        trainingNode,
-        testingNode,
-        "MlTemp/TMVA_DY_training.root",
-        "MlTemp/BDT_training_history.root",
-        "DrellYanClassification.weights.xml",
-        "BDTG",
-        "DY_BDT_dataset",
-        numberOfTrees,
-        maximumDepth,
-        minimumNodeSizePercent,
-        baggedSampleFraction,
-        numberOfCuts,
-        shrinkage,
-        randomSeed,
-        DatasetUsagePercentage,
-        numberOfThreads
-    );
-    logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
-
-
+ 
     //REAL DATA LOADING
     const auto realDataFiles = loadFileList(RealDataFilesPath, DevelopmentMode, DevelopmentRealDataFiles);
 
@@ -941,26 +984,86 @@ void MlRun()
     if (realBdtData.features != features)
         throw std::runtime_error("Real-data and MC BDT feature lists differ");
 
-    //EVALUATION
-    evaluateDrellYanBdt(
-        features,
-        testingNode,
-        realBdtData.df,
-        // weightsFile,
-        "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
-        "BDTG",
-        decisionThreshold,
-        EvaluationUsagePercentage,
-        HistogramUsagePercentage,
-        FalseHistogramUsagePercentage,
-        randomSeed,
-        BackgroundFilesPaths,
-        mcScales
-    );
 
-    logElapsedTime("BDT evaluation END");
+    //Main and BG events will all the amount of muons pass in the training.
+    // const std::string weightsFile = trainDrellYanBdt(
+    //     features,
+    //     trainingNode,
+    //     testingNode,
+    //     "MlTemp/TMVA_DY_training.root",
+    //     "MlTemp/BDT_training_history.root",
+    //     "DrellYanClassification.weights.xml",
+    //     "BDTG",
+    //     "DY_BDT_dataset",
+    //     numberOfTrees,
+    //     maximumDepth,
+    //     minimumNodeSizePercent,
+    //     baggedSampleFraction,
+    //     numberOfCuts,
+    //     shrinkage,
+    //     randomSeed,
+    //     DatasetUsagePercentage,
+    //     numberOfThreads
+    // );
+    // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
+
+
+    //EVALUATION
+    // evaluateDrellYanBdt(
+    //     features,
+    //     testingNode,
+    //     realBdtData.df,
+    //     // weightsFile,
+    //     "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
+    //     "BDTG",
+    //     decisionThreshold,
+    //     EvaluationUsagePercentage,
+    //     HistogramUsagePercentage,
+    //     FalseHistogramUsagePercentage,
+    //     randomSeed,
+    //     BackgroundFilesPaths,
+    //     mcScales
+    // );
+    // logElapsedTime("BDT evaluation END");
+
+
+    if (UseNeuralNetwork) {
+        const std::string nnWeightsFile = trainDrellYanNn(
+            features,
+            trainingNode,
+            testingNode,
+            nnModelFile,
+            nnHiddenLayers,
+            nnNumberOfEpochs,
+            nnBatchSize,
+            nnLearningRate,
+            nnWeightDecay,
+            nnDropoutProbability,
+            nnRandomSeed,
+            DatasetUsagePercentage,
+            numberOfThreads
+        );
+
+        logValue("Trained model", nnWeightsFile);
+        logElapsedTime("NN training END");
+
+        evaluateDrellYanNn(
+            features,
+            testingNode,
+            nnWeightsFile,
+            nnDecisionThreshold,
+            EvaluationUsagePercentage,
+            nnRandomSeed,
+            nnBatchSize,
+            numberOfThreads
+        );
+
+        logElapsedTime("NN evaluation END");
+        logElapsedTime("MlRun complete");
+        return;
+    }
+
+
     logElapsedTime("MlRun complete");
 }
-
-
 

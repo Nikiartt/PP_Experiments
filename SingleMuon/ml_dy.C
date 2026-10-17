@@ -1,3 +1,4 @@
+
 #ifndef ML_DY_C
 #define ML_DY_C
 
@@ -33,24 +34,35 @@
 #include <TSystem.h>
 #include <unordered_set>
 #include <random>
-#include <torch/torch.h>
-#include <ATen/Parallel.h>
-#include <ROOT/RDFHelpers.hxx>
-#include <TROOT.h>
-#include <THStack.h>
-#include <TPad.h>
-#include <TLine.h>
-#include <TColor.h>
-#include <TGraphErrors.h>
-#include <functional>
-#include <tuple>
-#include <cstdint>
-#include <cctype>
-#include <torch/serialize.h>
+// #include <torch/torch.h>
+#include <torch/types.h>                           // Tensors, tensor creation and operations
+#include <torch/utils.h>                           // manual_seed and NoGradGuard
+#include <torch/nn/module.h>                       // Base neural-network module
+#include <torch/nn/pimpl.h>                        // TORCH_MODULE
+#include <torch/nn/modules/container/sequential.h> // Sequential network
+#include <torch/nn/modules/linear.h>               // Linear layers
+#include <torch/nn/modules/activation.h>           // ReLU
+#include <torch/nn/modules/dropout.h>              // Dropout
+#include <torch/nn/functional/loss.h>              // Binary cross-entropy with logits
+#include <torch/optim/adam.h>                      // Adam optimizer
+// #include <ATen/Parallel.h>
+// #include <ROOT/RDFHelpers.hxx>
+// #include <TROOT.h>
+// #include <THStack.h>
+// #include <TPad.h>
+// #include <TLine.h>
+// #include <TColor.h>
+// #include <TGraphErrors.h>
+// #include <functional>
+// #include <tuple>
+// #include <cstdint>
+// #include <cctype>
+// #include <torch/serialize.h>
+#include <torch/serialize/archive.h>
 
 // Functions implemented in ML.C, after #include "ml_dy.C".
 ULong64_t mix64(ULong64_t x);
-ROOT::RDF::RNode BDT_HLT_IsoMu24_pT_n_filter(ROOT::RDF::RNode df);
+ROOT::RDF::RNode HLT_IsoMu24_pT_n_filter(ROOT::RDF::RNode df);
 ROOT::RDF::RNode makeMuonAndDimuonKinematicsDataFrame(ROOT::RDF::RNode df);
 
 struct BdtHistory {
@@ -1311,7 +1323,7 @@ void CreateBdtRealDataMcComparisonHistograms(
         }, {"Muon_pt", "Muon_eta", "Muon_phi"});
 
         // Use the same comparison preselection for every MC source and real data.
-        return makeMuonAndDimuonKinematicsDataFrame(BDT_HLT_IsoMu24_pT_n_filter(valid));
+        return makeMuonAndDimuonKinematicsDataFrame(HLT_IsoMu24_pT_n_filter(valid));
     };
 
     auto mc = prepare(mcDf).Define("BdtComparisonWeight",
@@ -1654,4 +1666,453 @@ void evaluateDrellYanBdt(
     std::cout << "evaluateDrellYanBdt END\n";
 }
 
+struct NnData {
+    torch::Tensor inputs, labels;
+    ULong64_t signalEvents = 0, skippedEvents = 0;
+};
+
+std::string getNnFeatureSchema(const std::vector<std::string>& features)
+{
+    std::string result;
+    for (const auto& feature : features) result += feature + "\n";
+    return result;
+}
+
+NnData loadDrellYanNnData(
+    const std::vector<std::string>& features, ROOT::RDF::RNode df,
+    const std::string& sampleName)
+{
+    if (features.empty()) throw std::runtime_error("NN feature list is empty");
+    if (!df.HasColumn("IsDyProcess"))
+        throw std::runtime_error(sampleName + " dataframe is missing IsDyProcess");
+
+    //Keep features and label in the same row, including under ROOT multithreading.
+    std::string expression = "ROOT::VecOps::RVec<float>{";
+    for (const auto& feature : features) {
+        if (!df.HasColumn(feature))
+            throw std::runtime_error("Missing " + sampleName + " feature: " + feature);
+        expression += "static_cast<float>(" + feature + "),";
+    }
+    expression += "(IsDyProcess ? 1.f : 0.f)}";
+
+    std::string rowColumn = "DrellYanNnInputRow";
+    while (df.HasColumn(rowColumn)) rowColumn += "_";
+
+    auto rowsResult = df.Define(rowColumn, expression)
+        .Take<ROOT::VecOps::RVec<float>>(rowColumn);
+    const auto& rows = *rowsResult;
+
+    const int64_t numberOfFeatures = static_cast<int64_t>(features.size());
+    const auto options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+
+    NnData result;
+    result.inputs = torch::empty({static_cast<int64_t>(rows.size()), numberOfFeatures}, options);
+    result.labels = torch::empty({static_cast<int64_t>(rows.size()), 1}, options);
+
+    auto inputs = result.inputs.accessor<float, 2>();
+    auto labels = result.labels.accessor<float, 2>();
+    int64_t validRows = 0;
+
+    for (const auto& row : rows) {
+        if (!std::all_of(row.begin(), row.end(), [](float value) { return std::isfinite(value); })) {
+            ++result.skippedEvents;
+            continue;
+        }
+
+        for (int64_t i = 0; i < numberOfFeatures; ++i) inputs[validRows][i] = row[i];
+        labels[validRows][0] = row[numberOfFeatures];
+        if (row[numberOfFeatures] > 0.5f) ++result.signalEvents;
+        ++validRows;
+    }
+
+    result.inputs = result.inputs.narrow(0, 0, validRows);
+    result.labels = result.labels.narrow(0, 0, validRows);
+
+    logValue(sampleName + " input events", rows.size());
+    logValue(sampleName + " valid events", validRows);
+    logValue(sampleName + " skipped non-finite events", result.skippedEvents);
+    logValue(sampleName + " signal", result.signalEvents);
+    logValue(sampleName + " background", static_cast<ULong64_t>(validRows) - result.signalEvents);
+
+    if (validRows == 0) throw std::runtime_error(sampleName + " sample contains no valid NN events");
+    return result;
+}
+
+struct DrellYanNnImpl : torch::nn::Module {
+    torch::nn::Sequential network;
+    torch::Tensor inputMean, inputScale;
+
+    DrellYanNnImpl(int64_t numberOfFeatures, const std::vector<int64_t>& hiddenLayers,
+                  double dropoutProbability)
+    {
+        if (numberOfFeatures <= 0 || hiddenLayers.empty())
+            throw std::runtime_error("NN requires input features and at least one hidden layer");
+        if (!std::isfinite(dropoutProbability) || dropoutProbability < 0.0 || dropoutProbability >= 1.0)
+            throw std::runtime_error("NN dropout probability must be in [0, 1)");
+
+        int64_t previousSize = numberOfFeatures;
+        for (const int64_t layerSize : hiddenLayers) {
+            if (layerSize <= 0) throw std::runtime_error("NN hidden layer sizes must be positive");
+            network->push_back(torch::nn::Linear(previousSize, layerSize));
+            network->push_back(torch::nn::ReLU());
+            network->push_back(torch::nn::Dropout(dropoutProbability));
+            previousSize = layerSize;
+        }
+
+        //Return one logit; sigmoid is applied when calculating prediction probabilities.
+        network->push_back(torch::nn::Linear(previousSize, 1));
+        register_module("network", network);
+
+        inputMean = register_buffer("input_mean", torch::zeros({numberOfFeatures}, torch::kFloat64));
+        inputScale = register_buffer("input_scale", torch::ones({numberOfFeatures}, torch::kFloat64));
+    }
+
+    torch::Tensor forward(torch::Tensor inputs)
+    {
+        auto normalized = ((inputs.to(torch::kFloat64) - inputMean) / inputScale).to(torch::kFloat32);
+        return network->forward(normalized);
+    }
+};
+TORCH_MODULE(DrellYanNn);
+
+DrellYanNn loadDrellYanNn(
+    const std::vector<std::string>& features, const std::string& modelFile)
+{
+    if (!std::ifstream(modelFile, std::ios::binary))
+        throw std::runtime_error("Cannot open NN model: " + modelFile);
+
+    torch::serialize::InputArchive archive, modelArchive;
+    archive.load_from(modelFile, torch::Device(torch::kCPU));
+
+    c10::IValue savedFeatures;
+    torch::Tensor savedLayers, savedDropout;
+    archive.read("features", savedFeatures);
+    archive.read("hidden_layers", savedLayers, true);
+    archive.read("dropout", savedDropout, true);
+
+    if (savedFeatures.toStringRef() != getNnFeatureSchema(features))
+        throw std::runtime_error("NN model and evaluation feature names/order differ");
+
+    savedLayers = savedLayers.contiguous();
+    const int64_t* layerSizes = savedLayers.data_ptr<int64_t>();
+    std::vector<int64_t> hiddenLayers(layerSizes, layerSizes + savedLayers.numel());
+
+    DrellYanNn model(static_cast<int64_t>(features.size()), hiddenLayers, savedDropout.item<double>());
+    archive.read("model", modelArchive);
+    model->load(modelArchive);
+    model->eval();
+    return model;
+}
+
+std::string trainDrellYanNn(
+    const std::vector<std::string>& features,
+    ROOT::RDF::RNode trainingDf,
+    ROOT::RDF::RNode testingDf,
+    const std::string& modelFile,
+    const std::vector<int64_t>& hiddenLayers,
+    unsigned numberOfEpochs,
+    int64_t batchSize,
+    double learningRate,
+    double weightDecay,
+    double dropoutProbability,
+    unsigned randomSeed,
+    double datasetUsagePercentage,
+    unsigned numberOfThreads)
+{
+    std::cout << "trainDrellYanNn START\n";
+    std::cout << "Features: " << features.size() << "\n";
+    std::cout << "Dataset usage: " << datasetUsagePercentage << "%\n";
+
+    if (features.empty() || modelFile.empty())
+        throw std::runtime_error("NN features and model file must not be empty");
+    if (numberOfEpochs == 0 || batchSize <= 0)
+        throw std::runtime_error("NN epochs and batch size must be positive");
+    if (!std::isfinite(learningRate) || learningRate <= 0.0)
+        throw std::runtime_error("NN learning rate must be positive");
+    if (!std::isfinite(weightDecay) || weightDecay < 0.0)
+        throw std::runtime_error("NN weight decay must be non-negative");
+    if (numberOfThreads == 0 || numberOfThreads > static_cast<unsigned>(std::numeric_limits<int>::max()))
+        throw std::runtime_error("Invalid NN thread count");
+    if (!std::isfinite(datasetUsagePercentage) || datasetUsagePercentage <= 0.0 || datasetUsagePercentage > 100.0)
+        throw std::runtime_error("Dataset usage percentage must be in (0, 100]");
+    if (!trainingDf.HasColumn("Index") || !testingDf.HasColumn("Index"))
+        throw std::runtime_error("NN training/testing dataframe is missing Index");
+
+    const ULong64_t keepThreshold = static_cast<ULong64_t>(std::llround(datasetUsagePercentage * 100.0));
+    if (keepThreshold == 0) throw std::runtime_error("Dataset usage percentage rounds to zero");
+
+    const auto useEvent = [keepThreshold, randomSeed](ULong64_t index) {
+        return (index * 7919ULL + randomSeed) % 10000ULL < keepThreshold;
+    };
+
+    at::set_num_threads(static_cast<int>(numberOfThreads));
+    torch::manual_seed(randomSeed);
+    DrellYanNn model(static_cast<int64_t>(features.size()), hiddenLayers, dropoutProbability);
+
+    logLine("\n--- NN TRAINING FEATURES ---");
+    logValue("Number of features", features.size());
+    for (size_t i = 0; i < features.size(); ++i)
+        logValue("Feature " + std::to_string(i + 1), features[i]);
+
+    logLine("\n--- NN TRAINING DATA ---");
+    logElapsedTime("NN data loading START");
+    auto training = loadDrellYanNnData(features, trainingDf.Filter(useEvent, {"Index"}), "NN training");
+    auto testing = loadDrellYanNnData(features, testingDf.Filter(useEvent, {"Index"}), "NN testing");
+    logElapsedTime("NN data loading END");
+
+    const int64_t trainingEvents = training.inputs.size(0), testingEvents = testing.inputs.size(0);
+    if (training.signalEvents == 0 || training.signalEvents == static_cast<ULong64_t>(trainingEvents))
+        throw std::runtime_error("NN training sample does not contain both classes");
+    if (testing.signalEvents == 0 || testing.signalEvents == static_cast<ULong64_t>(testingEvents))
+        throw std::runtime_error("NN testing sample does not contain both classes");
+
+    logValue("NN training baseline accuracy (always background)",
+             1.0 - static_cast<double>(training.signalEvents) / trainingEvents);
+    logValue("NN testing baseline accuracy (always background)",
+             1.0 - static_cast<double>(testing.signalEvents) / testingEvents);
+
+    //Fit normalization only on training data. Double precision avoids overflow in variance calculations.
+    {
+        torch::NoGradGuard noGrad;
+        for (int64_t i = 0; i < static_cast<int64_t>(features.size()); ++i) {
+            auto column = training.inputs.select(1, i).to(torch::kFloat64);
+            model->inputMean.select(0, i).copy_(column.mean());
+            model->inputScale.select(0, i).copy_(column.std(false).clamp_min(1e-6));
+        }
+    }
+
+    torch::optim::Adam optimizer(
+        model->parameters(), torch::optim::AdamOptions(learningRate).weight_decay(weightDecay));
+
+    auto calculateTestingLoss = [&]() {
+        torch::NoGradGuard noGrad;
+        model->eval();
+        double totalLoss = 0.0;
+
+        for (int64_t start = 0; start < testingEvents;) {
+            const int64_t count = std::min(batchSize, testingEvents - start);
+            auto logits = model->forward(testing.inputs.narrow(0, start, count));
+            auto loss = torch::nn::functional::binary_cross_entropy_with_logits(
+                logits, testing.labels.narrow(0, start, count));
+            const double value = loss.item<double>();
+
+            if (!std::isfinite(value)) throw std::runtime_error("NN testing loss is non-finite");
+            totalLoss += value * count;
+            start += count;
+        }
+        return totalLoss / testingEvents;
+    };
+
+    logLine("\n--- NN TRAINING HISTORY ---");
+    logElapsedTime("NN optimization START");
+
+    for (unsigned epoch = 0; epoch < numberOfEpochs; ++epoch) {
+        model->train();
+        auto order = torch::randperm(trainingEvents, torch::TensorOptions().dtype(torch::kInt64));
+        double totalLoss = 0.0;
+
+        for (int64_t start = 0; start < trainingEvents;) {
+            const int64_t count = std::min(batchSize, trainingEvents - start);
+            auto indices = order.narrow(0, start, count);
+            auto inputs = training.inputs.index_select(0, indices);
+            auto labels = training.labels.index_select(0, indices);
+
+            optimizer.zero_grad();
+            auto logits = model->forward(inputs);
+            auto loss = torch::nn::functional::binary_cross_entropy_with_logits(logits, labels);
+            const double value = loss.item<double>();
+
+            if (!std::isfinite(value)) throw std::runtime_error("NN training loss is non-finite");
+            loss.backward();
+            optimizer.step();
+
+            totalLoss += value * count;
+            start += count;
+        }
+
+        const double trainingLoss = totalLoss / trainingEvents;
+        const double testingLoss = calculateTestingLoss();
+
+        std::cout << "Epoch " << epoch + 1 << "/" << numberOfEpochs
+                  << " training loss: " << trainingLoss << " testing loss: " << testingLoss << "\n";
+        logValue("NN epoch", epoch + 1);
+        logValue("NN mean training batch loss", trainingLoss);
+        logValue("NN testing loss", testingLoss);
+    }
+
+    logElapsedTime("NN optimization END");
+
+    //Save architecture, feature order, normalization buffers and trained weights together.
+    model->eval();
+    torch::serialize::OutputArchive archive, modelArchive;
+    model->save(modelArchive);
+    archive.write("model", modelArchive);
+    archive.write("features", c10::IValue(getNnFeatureSchema(features)));
+    archive.write("hidden_layers", torch::tensor(hiddenLayers, torch::kInt64), true);
+    archive.write("dropout", torch::tensor(dropoutProbability, torch::kFloat64), true);
+
+    const std::string directory = gSystem->DirName(modelFile.c_str());
+    gSystem->mkdir(directory.c_str(), true);
+    archive.save_to(modelFile);
+
+    if (!std::ifstream(modelFile, std::ios::binary))
+        throw std::runtime_error("NN model was not created: " + modelFile);
+
+    logValue("Trained NN model", modelFile);
+    logElapsedTime("NN training COMPLETE");
+    std::cout << "trainDrellYanNn END\n";
+    return modelFile;
+}
+
+void evaluateDrellYanNn(
+    const std::vector<std::string>& features,
+    ROOT::RDF::RNode testingDf,
+    const std::string& modelFile,
+    double decisionThreshold,
+    double evaluationUsagePercentage,
+    unsigned randomSeed,
+    int64_t batchSize,
+    unsigned numberOfThreads)
+{
+    std::cout << "evaluateDrellYanNn START\n";
+    std::cout << "Model file: " << modelFile << "\n";
+
+    if (!std::isfinite(decisionThreshold) || decisionThreshold < 0.0 || decisionThreshold > 1.0)
+        throw std::runtime_error("NN decision threshold must be in [0, 1]");
+    if (!std::isfinite(evaluationUsagePercentage) || evaluationUsagePercentage <= 0.0 || evaluationUsagePercentage > 100.0)
+        throw std::runtime_error("Evaluation usage percentage must be in (0, 100]");
+    if (batchSize <= 0 || numberOfThreads == 0 ||
+        numberOfThreads > static_cast<unsigned>(std::numeric_limits<int>::max()))
+        throw std::runtime_error("Invalid NN evaluation batch size or thread count");
+    if (!testingDf.HasColumn("Index") || !testingDf.HasColumn("IsDyProcess"))
+        throw std::runtime_error("NN testing dataframe is missing Index or IsDyProcess");
+
+    const ULong64_t keepThreshold = static_cast<ULong64_t>(std::llround(evaluationUsagePercentage * 100.0));
+    if (keepThreshold == 0) throw std::runtime_error("Evaluation usage percentage rounds to zero");
+
+    const auto useEvaluationEvent = [keepThreshold, randomSeed](ULong64_t index) {
+        return mix64(index ^ static_cast<ULong64_t>(randomSeed) ^ 0xd1b54a32d192ed03ULL)
+            % 10000ULL < keepThreshold;
+    };
+
+    at::set_num_threads(static_cast<int>(numberOfThreads));
+    auto model = loadDrellYanNn(features, modelFile);
+
+    auto testingCount = testingDf.Count();
+    auto testingDyCount = testingDf.Filter([](bool isDy) { return isDy; }, {"IsDyProcess"}).Count();
+    std::vector<ROOT::RDF::RResultHandle> handles = {testingCount, testingDyCount};
+    ROOT::RDF::RunGraphs(handles);
+
+    logLine("\n--- NN EVALUATION DATA ---");
+    logValue("Testing dataframe events", *testingCount);
+    logValue("Testing dataframe DY events", *testingDyCount);
+    logValue("Testing dataframe DY [%]",
+             *testingCount > 0 ? 100.0 * static_cast<double>(*testingDyCount) / *testingCount : 0.0);
+
+    auto evaluationDf = testingDf.Filter(useEvaluationEvent, {"Index"});
+    auto testing = loadDrellYanNnData(features, evaluationDf, "NN evaluation");
+    const int64_t evaluatedEvents = testing.inputs.size(0);
+
+    double truePositive = 0.0, trueNegative = 0.0, falsePositive = 0.0, falseNegative = 0.0;
+    double totalLoss = 0.0;
+    std::vector<std::pair<float, int>> scoredEvents;
+    scoredEvents.reserve(static_cast<size_t>(evaluatedEvents));
+
+    torch::NoGradGuard noGrad;
+    model->eval();
+
+    for (int64_t start = 0; start < evaluatedEvents;) {
+        const int64_t count = std::min(batchSize, evaluatedEvents - start);
+        auto labels = testing.labels.narrow(0, start, count);
+        auto logits = model->forward(testing.inputs.narrow(0, start, count));
+
+        if (!torch::isfinite(logits).all().item<bool>())
+            throw std::runtime_error("NN produced non-finite evaluation logits");
+
+        auto probabilities = torch::sigmoid(logits).contiguous();
+        auto loss = torch::nn::functional::binary_cross_entropy_with_logits(logits, labels);
+        const double batchLoss = loss.item<double>();
+        if (!std::isfinite(batchLoss)) throw std::runtime_error("NN evaluation loss is non-finite");
+        totalLoss += batchLoss * count;
+
+        const float* scores = probabilities.data_ptr<float>();
+        const float* truth = labels.data_ptr<float>();
+
+        for (int64_t i = 0; i < count; ++i) {
+            const bool isDyProcess = truth[i] > 0.5f;
+            const bool predictedDy = scores[i] >= decisionThreshold;
+
+            if (isDyProcess && predictedDy) ++truePositive;
+            else if (!isDyProcess && !predictedDy) ++trueNegative;
+            else if (!isDyProcess && predictedDy) ++falsePositive;
+            else ++falseNegative;
+
+            scoredEvents.emplace_back(scores[i], isDyProcess ? 1 : 0);
+        }
+        start += count;
+    }
+
+    const double total = truePositive + trueNegative + falsePositive + falseNegative;
+    const double accuracy = (truePositive + trueNegative) / total;
+    const double precision = truePositive + falsePositive > 0.0 ? truePositive / (truePositive + falsePositive) : 0.0;
+    const double recall = truePositive + falseNegative > 0.0 ? truePositive / (truePositive + falseNegative) : 0.0;
+    const double specificity = trueNegative + falsePositive > 0.0 ? trueNegative / (trueNegative + falsePositive) : 0.0;
+    const double f1 = precision + recall > 0.0 ? 2.0 * precision * recall / (precision + recall) : 0.0;
+    const double significance = truePositive + falsePositive > 0.0 ? truePositive / std::sqrt(truePositive + falsePositive) : 0.0;
+
+    std::sort(scoredEvents.begin(), scoredEvents.end(),
+        [](const auto& a, const auto& b) { return a.first > b.first; });
+
+    const double totalSignal = truePositive + falseNegative;
+    const double totalBackground = trueNegative + falsePositive;
+    double auc = std::numeric_limits<double>::quiet_NaN();
+
+    //Group tied scores before integrating the ROC curve, as in the BDT evaluation.
+    if (totalSignal > 0.0 && totalBackground > 0.0) {
+        double cumulativeSignal = 0.0, cumulativeBackground = 0.0;
+        double previousTpr = 0.0, previousFpr = 0.0, area = 0.0;
+
+        for (size_t i = 0; i < scoredEvents.size();) {
+            size_t j = i;
+            while (j < scoredEvents.size() && scoredEvents[j].first == scoredEvents[i].first) {
+                if (scoredEvents[j].second) ++cumulativeSignal;
+                else ++cumulativeBackground;
+                ++j;
+            }
+
+            const double tpr = cumulativeSignal / totalSignal;
+            const double fpr = cumulativeBackground / totalBackground;
+            area += (fpr - previousFpr) * (tpr + previousTpr) * 0.5;
+            previousTpr = tpr; previousFpr = fpr;
+            i = j;
+        }
+        auc = area;
+    }
+
+    logLine("\n--- NN evaluation ---");
+
+    logValue("Model file", modelFile);
+    logValue("Evaluation usage [%]", evaluationUsagePercentage);
+    logValue("Evaluation random seed", randomSeed);
+    logValue("Evaluation batch size", batchSize);
+    logValue("Evaluation threads", numberOfThreads);
+    logValue("Evaluated events", evaluatedEvents);
+    logValue("Model selected events", truePositive + falsePositive);
+    logValue("Decision threshold", decisionThreshold);
+    logValue("True positives", truePositive);
+    logValue("True negatives", trueNegative);
+    logValue("False positives", falsePositive);
+    logValue("False negatives", falseNegative);
+    logValue("Accuracy", accuracy);
+    logValue("PRECISION", precision);
+    logValue("Recall", recall);
+    logValue("Background rejection", specificity);
+    logValue("F1", f1);
+    logValue("ROC AUC", auc);
+    logValue("Log-loss", totalLoss / evaluatedEvents);
+    logValue("S/sqrt(S+B)", significance);
+
+    logElapsedTime("NN evaluation COMPLETE");
+    std::cout << "evaluateDrellYanNn END\n";
+}
 #endif
