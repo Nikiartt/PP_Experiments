@@ -749,7 +749,7 @@ void MlRun()
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
     const double DatasetUsagePercentage = 5.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
-    const double EvaluationUsagePercentage = 10.00;//Cuts if the data set is still so big and dont fit into memory.
+    const double EvaluationUsagePercentage = 5.00;//Cuts if the data set is still so big and dont fit into memory.
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -758,7 +758,7 @@ void MlRun()
     const std::string JsonLuminosityPath = "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON_MuonPhys.txt";
     const std::string LuminosityCsvPath = "Run2016H_MuonPhys_lumibyls.csv";
     
-    //Parameters adjustment
+    //BDT Parameters adjustment
     //START LOG 26/27+-
     // 2026-09-14 I set training data to 20 % and the PRECISION increased to 0.626127 (one percent acheived 68% PRECISION)
     // I increase the numberOfTrees to 40 from 30
@@ -796,12 +796,29 @@ void MlRun()
     const unsigned int randomSeed = 1;
     const double decisionThreshold = 0.0;//decisionThreshold is the cutoff applied to the BDT output score to convert the continuous BDT prediction into a binary class.
 
+    // NN  parameters adjustment
+    // NOT IMPLEMENTED 3 PARTS DATA SPLITTING!!! // Starting point PRECISION:  0.860521,  DatasetUsagePercentage = 5.00, EvaluationUsagePercentage = 5.00, numberOfTrees = 5, nnBatchSize = 512; nnLearningRate = 0.001; nnDecisionThreshold = 0.5;, nnDropoutProbability = 0.00; nnHiddenLayers = {128, 64}; trainingFraction = 0.70, Epoch 5/5 training loss: 0.0204326 testing loss: 0.0216193, 26 inputs → Linear(128) → ReLU → Dropout(0) → Linear(64)  → ReLU → Dropout(0) → Linear(1)   → output logit.  lognn51
+    // Reduce the  nnBatchSize to 256;  PRECISION: 0.837543  logNN52.txt
+    // Increasing the epochs to 25  on nnBatchSize to 256; Very fluctuating PRECISION: 0.842328.
+    // Decreased the epochs to 12  on nnBatchSize to 128; Very fluctuating PRECISION: from 0.882328 to final PRECISION: 0.853493. And so long time it took1700 s. logNN53.txt
+    // Increase  nnBatchSize = 1024 and nnNumberOfEpochs = 7 PRECISION: 0.853008 so long nul less fluctuation. logNN54.txt
+
+    //Returning to the inicial state of code of first NN.
+    //Increase the nnNumberOfEpochs = 10; logNN55.txt PRECISION: 0.837543
+    // Increasedd the nnBatchSize = 1024 PRECISION: 0.872498 logNN56.txt
+    //Lets increase the train data from 5% to 10% and then increase the nnBatchSize = 2048 bad idea PRECISION: 0.846821 logNN57.txt
+    // Lets add the nnDropoutProbability = 0.10 and return the data to 5 % and the nnBatchSize = 1024 PRECISION: 0.858802
+    // Increase the nnDropoutProbability = 0.30 PRECISION: 0.855935 logNN58.txt
+    // Increase the nngRate = 0.01 
+
+
+
     //NN PARAMETERS
     const bool UseNeuralNetwork = true; //false runs the existing BDT workflow.
     const std::vector<int64_t> nnHiddenLayers = {128, 64};
-    const unsigned int nnNumberOfEpochs = 5;
-    const int64_t nnBatchSize = 512;
-    const double nnLearningRate = 0.001;
+    const unsigned int nnNumberOfEpochs = 10;
+    const int64_t nnBatchSize = 1024;
+    const double nnLearningRate = 0.01;
     const double nnWeightDecay = 0.0001;
     const double nnDropoutProbability = 0.00;
     const unsigned int nnRandomSeed = 1;
@@ -820,6 +837,7 @@ void MlRun()
         logValue("Learning rate", nnLearningRate); logValue("Weight decay", nnWeightDecay);
         logValue("Dropout probability", nnDropoutProbability); logValue("Random seed", nnRandomSeed);
         logValue("Decision threshold", nnDecisionThreshold); logValue("Model file", nnModelFile);
+        logValue("Dataset usage [%]", DatasetUsagePercentage);
         logValue("Evaluation usage [%]", EvaluationUsagePercentage);
     } else {
         logLine("[BDT model parameters]");
