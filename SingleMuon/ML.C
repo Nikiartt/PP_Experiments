@@ -816,10 +816,18 @@ void MlRun()
     //Lets increase the epochs from 10 to nnNumberOfEpochs = 20 PRECISION: 0.856587 logNN61.txt
     // OK RETURNED BACK nnLearningRate = 0.001; AND 10 EPOCHS AND LETS INCREASE THE  nnWeightDecay = 0.001; PRECISION: 0.831601 logNN62.txt
     // Return back to back and created normal data local saving: nnNumberOfEpochs = 10, nnBatchSize = 1024, nnLearningRate = 0.001; nnWeightDecay = 0.0001; nnDropoutProbability = 0.00; nnHiddenLayers = {128, 64}; DATA/VALIDATION/EVALUATION - 25%/20%/20% PRECISION: 0.885293 logNN63.txt
+    // nnNumberOfEpochs = 18; precision: 0.901264 logNN64.txt
+    //nnNumberOfEpochs = 10 and increase nnWeightDecay = 0.001; but nothing special logNN65.txt
+    // lets try the 3 layers nnHiddenLayers = {128, 128, 64}; not so resultative mut more stable logNN66.txt
+    // nnHiddenLayers = {32, 64, 32}; precision: 0.903221 logNN67.txt
+    // nnHiddenLayers = {256, 64}; precision: 0.892394 logNN68.txt
+    // nnBatchSize = 512 Epoch 7/10 training loss: 0.0181285 testing loss: 0.0186336 testing precision: 0.896248 logNN68.txt
+    //nnBatchSize = 256 precision: 0.885652 logNN70.txt
+    //nnBatchSize = 32 nothing special testing precision: 0.853988 logNN71.txt
 
     //NN PARAMETERS
     const bool UseNeuralNetwork = true; //false runs the existing BDT workflow.
-    const std::vector<int64_t> nnHiddenLayers = {128, 64};
+    const std::vector<int64_t> nnHiddenLayers = {64, 32};
     const unsigned int nnNumberOfEpochs = 10;
     const int64_t nnBatchSize = 1024;
     const double nnLearningRate = 0.001;
@@ -888,7 +896,8 @@ void MlRun()
             nnDropoutProbability,
             nnRandomSeed,
             100.0,//100%usage of reading file
-            numberOfThreads);
+            numberOfThreads,
+            nnDecisionThreshold);
 
         evaluateDrellYanNn(features,
             evaluation,
@@ -1103,83 +1112,46 @@ void MlRun()
         throw std::runtime_error("Real-data and MC BDT feature lists differ");
 
 
-    //Main and BG events will all the amount of muons pass in the training.
-    // const std::string weightsFile = trainDrellYanBdt(
-    //     features,
-    //     trainingNode,
-    //     testingNode,
-    //     "MlTemp/TMVA_DY_training.root",
-    //     "MlTemp/BDT_training_history.root",
-    //     "DrellYanClassification.weights.xml",
-    //     "BDTG",
-    //     "DY_BDT_dataset",
-    //     numberOfTrees,
-    //     maximumDepth,
-    //     minimumNodeSizePercent,
-    //     baggedSampleFraction,
-    //     numberOfCuts,
-    //     shrinkage,
-    //     randomSeed,
-    //     DatasetUsagePercentage,
-    //     numberOfThreads
-    // );
-    // logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
+    // Main and BG events will all the amount of muons pass in the training.
+    const std::string weightsFile = trainDrellYanBdt(
+        features,
+        trainingNode,
+        testingNode,
+        "MlTemp/TMVA_DY_training.root",
+        "MlTemp/BDT_training_history.root",
+        "DrellYanClassification.weights.xml",
+        "BDTG",
+        "DY_BDT_dataset",
+        numberOfTrees,
+        maximumDepth,
+        minimumNodeSizePercent,
+        baggedSampleFraction,
+        numberOfCuts,
+        shrinkage,
+        randomSeed,
+        DatasetUsagePercentage,
+        numberOfThreads
+    );
+    logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
 
 
-    //EVALUATION
-    // evaluateDrellYanBdt(
-    //     features,
-    //     testingNode,
-    //     realBdtData.df,
-    //     // weightsFile,
-    //     "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
-    //     "BDTG",
-    //     decisionThreshold,
-    //     EvaluationUsagePercentage,
-    //     HistogramUsagePercentage,
-    //     FalseHistogramUsagePercentage,
-    //     randomSeed,
-    //     BackgroundFilesPaths,
-    //     mcScales
-    // );
-    // logElapsedTime("BDT evaluation END");
-
-
-    if (UseNeuralNetwork) {
-        const std::string nnWeightsFile = trainDrellYanNn(
-            features,
-            trainingNode,
-            testingNode,
-            nnModelFile,
-            nnHiddenLayers,
-            nnNumberOfEpochs,
-            nnBatchSize,
-            nnLearningRate,
-            nnWeightDecay,
-            nnDropoutProbability,
-            nnRandomSeed,
-            DatasetUsagePercentage,
-            numberOfThreads
-        );
-
-        logValue("Trained model", nnWeightsFile);
-        logElapsedTime("NN training END");
-
-        evaluateDrellYanNn(
-            features,
-            testingNode,
-            nnWeightsFile,
-            nnDecisionThreshold,
-            EvaluationUsagePercentage,
-            nnRandomSeed,
-            nnBatchSize,
-            numberOfThreads
-        );
-
-        logElapsedTime("NN evaluation END");
-        logElapsedTime("MlRun complete");
-        return;
-    }
+    // EVALUATION
+    evaluateDrellYanBdt(
+        features,
+        testingNode,
+        realBdtData.df,
+        // weightsFile,
+        "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
+        "BDTG",
+        decisionThreshold,
+        EvaluationUsagePercentage,
+        HistogramUsagePercentage,
+        FalseHistogramUsagePercentage,
+        randomSeed,
+        BackgroundFilesPaths,
+        mcScales
+    );
+    logElapsedTime("BDT evaluation END");
 
 
     logElapsedTime("MlRun complete");

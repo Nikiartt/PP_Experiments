@@ -1817,7 +1817,8 @@ std::string trainDrellYanNn(
     double dropoutProbability,
     unsigned randomSeed,
     double datasetUsagePercentage,
-    unsigned numberOfThreads)
+    unsigned numberOfThreads,
+    double decisionThreshold)
 {
     std::cout << "trainDrellYanNn START\n";
     std::cout << "Features: " << features.size() << "\n";
@@ -1837,6 +1838,8 @@ std::string trainDrellYanNn(
         throw std::runtime_error("Dataset usage percentage must be in (0, 100]");
     if (!trainingDf.HasColumn("Index") || !testingDf.HasColumn("Index"))
         throw std::runtime_error("NN training/testing dataframe is missing Index");
+    if (!std::isfinite(decisionThreshold) || decisionThreshold < 0.0 || decisionThreshold > 1.0)
+        throw std::runtime_error("NN decision threshold must be in [0, 1]");
 
     const ULong64_t keepThreshold = static_cast<ULong64_t>(std::llround(datasetUsagePercentage * 100.0));
     if (keepThreshold == 0) throw std::runtime_error("Dataset usage percentage rounds to zero");
@@ -1884,27 +1887,36 @@ std::string trainDrellYanNn(
     torch::optim::Adam optimizer(
         model->parameters(), torch::optim::AdamOptions(learningRate).weight_decay(weightDecay));
 
-    auto calculateTestingLoss = [&]() {
+    auto calculateTestingMetrics = [&]() {
         torch::NoGradGuard noGrad;
         model->eval();
         double totalLoss = 0.0;
+        int64_t truePositive = 0, falsePositive = 0;
 
         for (int64_t start = 0; start < testingEvents;) {
             const int64_t count = std::min(batchSize, testingEvents - start);
+            auto labels = testing.labels.narrow(0, start, count);
             auto logits = model->forward(testing.inputs.narrow(0, start, count));
-            auto loss = torch::nn::functional::binary_cross_entropy_with_logits(
-                logits, testing.labels.narrow(0, start, count));
-            const double value = loss.item<double>();
-
+            const double value = torch::nn::functional::binary_cross_entropy_with_logits(logits, labels).item<double>();
             if (!std::isfinite(value)) throw std::runtime_error("NN testing loss is non-finite");
+
+            auto predicted = torch::ge(torch::sigmoid(logits), decisionThreshold);
+            truePositive += torch::logical_and(predicted, torch::gt(labels, 0.5)).sum().item<int64_t>();
+            falsePositive += torch::logical_and(predicted, torch::le(labels, 0.5)).sum().item<int64_t>();
             totalLoss += value * count;
             start += count;
         }
-        return totalLoss / testingEvents;
+
+        const double precision = truePositive + falsePositive > 0
+            ? static_cast<double>(truePositive) / (truePositive + falsePositive) : 0.0;
+        return std::make_pair(totalLoss / testingEvents, precision);
     };
 
     logLine("\n--- NN TRAINING HISTORY ---");
-    logElapsedTime("NN optimization START");
+    
+    logElapsedTime("NN Training START");
+
+    TGraph trainingLossGraph(numberOfEpochs), testingLossGraph(numberOfEpochs), precisionGraph(numberOfEpochs);
 
     for (unsigned epoch = 0; epoch < numberOfEpochs; ++epoch) {
         model->train();
@@ -1931,16 +1943,39 @@ std::string trainDrellYanNn(
         }
 
         const double trainingLoss = totalLoss / trainingEvents;
-        const double testingLoss = calculateTestingLoss();
+        const auto [testingLoss, precision] = calculateTestingMetrics();
+        trainingLossGraph.SetPoint(epoch, epoch + 1, trainingLoss);
+        testingLossGraph.SetPoint(epoch, epoch + 1, testingLoss);
+        precisionGraph.SetPoint(epoch, epoch + 1, precision);
 
         std::cout << "Epoch " << epoch + 1 << "/" << numberOfEpochs
-                  << " training loss: " << trainingLoss << " testing loss: " << testingLoss << "\n";
+                << " training loss: " << trainingLoss << " testing loss: " << testingLoss
+                << " testing precision: " << precision << "\n";
         logValue("NN epoch", epoch + 1);
         logValue("NN mean training batch loss", trainingLoss);
         logValue("NN testing loss", testingLoss);
+        logValue("NN testing precision", precision);
     }
 
-    logElapsedTime("NN optimization END");
+    gSystem->mkdir("Images", true);
+    TCanvas lossCanvas("nn_loss_canvas", "", 900, 650);
+    trainingLossGraph.SetTitle("NN loss by epoch;Epoch;Loss");
+    trainingLossGraph.SetLineColor(kBlue);
+    testingLossGraph.SetLineColor(kRed);
+    trainingLossGraph.Draw("AL");
+    testingLossGraph.Draw("L SAME");
+    TLegend legend(0.68, 0.75, 0.88, 0.88);
+    legend.AddEntry(&trainingLossGraph, "Training", "l");
+    legend.AddEntry(&testingLossGraph, "Testing", "l");
+    legend.Draw();
+    lossCanvas.SaveAs("Images/nn_loss.png");
+
+    TCanvas precisionCanvas("nn_precision_canvas", "", 900, 650);
+    precisionGraph.SetTitle("NN testing precision by epoch;Epoch;Precision");
+    precisionGraph.Draw("AL");
+    precisionCanvas.SaveAs("Images/nn_precision.png");
+
+    logElapsedTime("NN Training END");
 
     //Save architecture, feature order, normalization buffers and trained weights together.
     model->eval();
