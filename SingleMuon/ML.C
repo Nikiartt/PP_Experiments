@@ -748,8 +748,9 @@ void MlRun()
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 5.00; ///20% TAKES 6.6 GB OUT OF 7! //Cuts if the data set is still so big and dont fit into memory.
-    const double EvaluationUsagePercentage = 5.00;//Cuts if the data set is still so big and dont fit into memory.
+    const double DatasetUsagePercentage = 25.00;
+    const double ValidationUsagePercentage = 20.00; // Percent of the selected training sample.
+    const double EvaluationUsagePercentage = 10.00;
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -758,7 +759,7 @@ void MlRun()
     const std::string JsonLuminosityPath = "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON_MuonPhys.txt";
     const std::string LuminosityCsvPath = "Run2016H_MuonPhys_lumibyls.csv";
     
-    //BDT Parameters adjustment
+    //Parameters adjustment
     //START LOG 26/27+-
     // 2026-09-14 I set training data to 20 % and the PRECISION increased to 0.626127 (one percent acheived 68% PRECISION)
     // I increase the numberOfTrees to 40 from 30
@@ -796,6 +797,7 @@ void MlRun()
     const unsigned int randomSeed = 1;
     const double decisionThreshold = 0.0;//decisionThreshold is the cutoff applied to the BDT output score to convert the continuous BDT prediction into a binary class.
 
+
     // NN  parameters adjustment
     // NOT IMPLEMENTED 3 PARTS DATA SPLITTING!!! // Starting point PRECISION:  0.860521,  DatasetUsagePercentage = 5.00, EvaluationUsagePercentage = 5.00, numberOfTrees = 5, nnBatchSize = 512; nnLearningRate = 0.001; nnDecisionThreshold = 0.5;, nnDropoutProbability = 0.00; nnHiddenLayers = {128, 64}; trainingFraction = 0.70, Epoch 5/5 training loss: 0.0204326 testing loss: 0.0216193, 26 inputs → Linear(128) → ReLU → Dropout(0) → Linear(64)  → ReLU → Dropout(0) → Linear(1)   → output logit.  lognn51
     // Reduce the  nnBatchSize to 256;  PRECISION: 0.837543  logNN52.txt
@@ -809,16 +811,18 @@ void MlRun()
     //Lets increase the train data from 5% to 10% and then increase the nnBatchSize = 2048 bad idea PRECISION: 0.846821 logNN57.txt
     // Lets add the nnDropoutProbability = 0.10 and return the data to 5 % and the nnBatchSize = 1024 PRECISION: 0.858802
     // Increase the nnDropoutProbability = 0.30 PRECISION: 0.855935 logNN58.txt
-    // Increase the nngRate = 0.01 
-
-
+    // RETURN nnDropoutProbability = 0.00 and Increase the nngRate = 0.01 PRECISION: 0.846544 logNN59.txt
+    // Reduce the nnLearningRate = 0.0005; PRECISION: 0.84724 logNN60.txt
+    //Lets increase the epochs from 10 to nnNumberOfEpochs = 20 PRECISION: 0.856587 logNN61.txt
+    // OK RETURNED BACK nnLearningRate = 0.001; AND 10 EPOCHS AND LETS INCREASE THE  nnWeightDecay = 0.001; PRECISION: 0.831601 logNN62.txt
+    // Return back to back and created normal data local saving: nnNumberOfEpochs = 10, nnBatchSize = 1024, nnLearningRate = 0.001; nnWeightDecay = 0.0001; nnDropoutProbability = 0.00; nnHiddenLayers = {128, 64}; DATA/VALIDATION/EVALUATION - 25%/20%/20% PRECISION: 0.885293 logNN63.txt
 
     //NN PARAMETERS
     const bool UseNeuralNetwork = true; //false runs the existing BDT workflow.
     const std::vector<int64_t> nnHiddenLayers = {128, 64};
     const unsigned int nnNumberOfEpochs = 10;
     const int64_t nnBatchSize = 1024;
-    const double nnLearningRate = 0.01;
+    const double nnLearningRate = 0.001;
     const double nnWeightDecay = 0.0001;
     const double nnDropoutProbability = 0.00;
     const unsigned int nnRandomSeed = 1;
@@ -837,7 +841,6 @@ void MlRun()
         logValue("Learning rate", nnLearningRate); logValue("Weight decay", nnWeightDecay);
         logValue("Dropout probability", nnDropoutProbability); logValue("Random seed", nnRandomSeed);
         logValue("Decision threshold", nnDecisionThreshold); logValue("Model file", nnModelFile);
-        logValue("Dataset usage [%]", DatasetUsagePercentage);
         logValue("Evaluation usage [%]", EvaluationUsagePercentage);
     } else {
         logLine("[BDT model parameters]");
@@ -846,8 +849,59 @@ void MlRun()
         logValue("Bagged sample fraction", baggedSampleFraction); logValue("Number of cuts", numberOfCuts);
         logValue("Shrinkage", shrinkage); logValue("Random seed", randomSeed); logValue("Decision threshold", decisionThreshold);
     }
-    logLine("------");
 
+    const bool PrepareLocalData = false; // First run: true. Later runs: false.
+    const std::string localDir = "MlTemp/NNData";
+
+    auto percentName = [](double percent) {
+        std::ostringstream s; s << percent;
+        std::string name = s.str();
+        std::replace(name.begin(), name.end(), '.', 'p');
+        return name + "pct";
+    };
+
+    const std::string trainFile = localDir + "/DY_train_" + percentName(DatasetUsagePercentage) + ".root";
+    const std::string validationFile = localDir + "/DY_validation_" + percentName(ValidationUsagePercentage) + ".root";
+    const std::string evaluationFile = localDir + "/DY_evaluation_" + percentName(EvaluationUsagePercentage) + ".root";
+
+    logLine("------");
+    if (UseNeuralNetwork && !PrepareLocalData) {
+        logLine("--- TRAINING AND EVALUATION USING SAVED DATA ---");
+        for (const auto& file : {trainFile, validationFile, evaluationFile})
+            if (gSystem->AccessPathName(file.c_str()))
+                throw std::runtime_error("Local NN dataset missing: " + file);
+
+        ROOT::DisableImplicitMT();
+        ROOT::RDataFrame train("Events", trainFile);
+        ROOT::RDataFrame validation("Events", validationFile);
+        ROOT::RDataFrame evaluation("Events", evaluationFile);
+
+        const std::string weights = trainDrellYanNn(
+            features, train,
+            validation,
+            nnModelFile,
+            nnHiddenLayers,
+            nnNumberOfEpochs,
+            nnBatchSize,
+            nnLearningRate,
+            nnWeightDecay,
+            nnDropoutProbability,
+            nnRandomSeed,
+            100.0,//100%usage of reading file
+            numberOfThreads);
+
+        evaluateDrellYanNn(features,
+            evaluation,
+            weights,
+            nnDecisionThreshold,
+            100.0, //100%usage of reading file
+            nnRandomSeed,
+            nnBatchSize,
+            numberOfThreads);
+        logElapsedTime("MlRun complete");
+        return;
+    }
+    
     logLine("--- CREATE TRAINING AND TESTING DATA ---");
 
     const auto dyMainFiles = loadFileList(DyMainFilesPath, DevelopmentMode, DevelopmentFilesPerSample);
@@ -957,6 +1011,52 @@ void MlRun()
     ROOT::RDF::RNode trainingNode = dfWithSplit.Filter("IsTraining"); //trainingNode contains 30% of all events from all loaded files
     ROOT::RDF::RNode testingNode  = dfWithSplit.Filter("!IsTraining"); //testingNode contains 70% of all events from all loaded files
     
+    if (UseNeuralNetwork && PrepareLocalData) {
+        if (ValidationUsagePercentage <= 0.0 || ValidationUsagePercentage >= 100.0)
+            throw std::runtime_error("Validation percentage must be between 0 and 100");
+
+        gSystem->mkdir(localDir.c_str(), true);
+        const auto trainKeep = static_cast<ULong64_t>(std::llround(DatasetUsagePercentage * 100.0));
+        const auto validationKeep = static_cast<ULong64_t>(std::llround(ValidationUsagePercentage * 100.0));
+        const auto evalKeep = static_cast<ULong64_t>(std::llround(EvaluationUsagePercentage * 100.0));
+
+        const auto selectTrain = [trainKeep, nnRandomSeed](ULong64_t index) {
+            return (index * 7919ULL + nnRandomSeed) % 10000ULL < trainKeep;
+        };
+        const auto selectValidation = [validationKeep, nnRandomSeed](ULong64_t index) {
+            return mix64(index ^ static_cast<ULong64_t>(nnRandomSeed) ^
+                        0x243f6a8885a308d3ULL) % 10000ULL < validationKeep;
+        };
+        const auto selectEvaluation = [evalKeep, nnRandomSeed](ULong64_t index) {
+            return mix64(index ^ static_cast<ULong64_t>(nnRandomSeed) ^
+                        0xd1b54a32d192ed03ULL) % 10000ULL < evalKeep;
+        };
+
+        std::vector<std::string> columns = features;
+        columns.push_back("Index");
+        columns.push_back("IsDyProcess");
+
+        ROOT::RDF::RSnapshotOptions options;
+        options.fLazy = true;
+        options.fCompressionAlgorithm = ROOT::RCompressionSetting::EAlgorithm::kLZ4;
+        options.fCompressionLevel = 4;
+
+        auto selectedTraining = trainingNode.Filter(selectTrain, {"Index"});
+        auto savedTrain = selectedTraining
+            .Filter([selectValidation](ULong64_t index) { return !selectValidation(index); }, {"Index"})
+            .Snapshot("Events", trainFile, columns, options);
+        auto savedValidation = selectedTraining.Filter(selectValidation, {"Index"})
+            .Snapshot("Events", validationFile, columns, options);
+        auto savedEvaluation = testingNode.Filter(selectEvaluation, {"Index"})
+            .Snapshot("Events", evaluationFile, columns, options);
+
+        ROOT::RDF::RunGraphs(std::vector<ROOT::RDF::RResultHandle>{
+            savedTrain, savedValidation, savedEvaluation
+        });
+        logElapsedTime("Local NN datasets saved");
+        return;
+    }
+
     std::cout << "cachedBdtData completed\n";
 
     logElapsedTime("Training/testing dataframes created");
