@@ -558,9 +558,37 @@ void SaveBdtHistogram(TH1D& histogram, const std::string& file, bool logY = fals
     logValue("Evaluation histogram saved", file);
 }
 
+void SaveModelHistogram(
+    TH1D& histogram, std::string file, const std::string& modelTag, bool logY = false)
+{
+    if (modelTag == "nn") {
+        std::string title = histogram.GetTitle();
+        if (title.rfind("BDT ", 0) == 0) {
+            title.replace(0, 3, "NN");
+            histogram.SetTitle(title.c_str());
+        }
+
+        std::string name = histogram.GetName();
+        if (name.rfind("nn_", 0) != 0)
+            histogram.SetName(("nn_" + name).c_str());
+
+        const std::string predictedPrefix = "Images/bdt_predicted_";
+        const std::string falsePrefix = "Images/model_false_";
+        if (file.rfind(predictedPrefix, 0) == 0)
+            file.replace(0, predictedPrefix.size(), "Images/nn_predicted_");
+        else if (file.rfind(falsePrefix, 0) == 0)
+            file.replace(0, falsePrefix.size(), "Images/nn_model_false_");
+    } else if (modelTag != "bdt") {
+        throw std::runtime_error("Unknown histogram model tag: " + modelTag);
+    }
+
+    SaveBdtHistogram(histogram, file, logY);
+}
+
 void CreateBdtPredictionHistograms(
     ROOT::RDF::RNode histogramDf,
-    const std::shared_ptr<std::unordered_set<ULong64_t>>& selectedIndices)
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& selectedIndices,
+    const std::string& modelTag = "bdt")
 {
     logLine("");
     logLine("--- CREATE HISTOGRAMS ---");
@@ -742,7 +770,8 @@ void CreateBdtDifferenceHistograms(
 
 void CreateBdtFalseHistograms(
     ROOT::RDF::RNode evaluationDf, std::vector<ULong64_t> rejectedIndices,
-    double trueNegative, double falseNegative, double falseHistogramUsagePercentage, unsigned randomSeed)
+    double trueNegative, double falseNegative, double falseHistogramUsagePercentage,
+    unsigned randomSeed, const std::string& modelTag = "bdt")
 {
     const size_t falseSampleSize = static_cast<size_t>(
         std::llround((falseHistogramUsagePercentage / 100.0) * rejectedIndices.size()));
@@ -1265,10 +1294,13 @@ std::vector<RealDataBdtPrediction> RunRealDataDrellYanBdtPrediction(
 void CreateBdtRealDataMcComparisonHistograms(
     ROOT::RDF::RNode mcDf,
     ROOT::RDF::RNode realDf,
-    const BdtPredictionResult& mcPrediction,
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& mcSelectedIndices,
+    const std::vector<ULong64_t>& mcRejectedIndices,
     const std::vector<RealDataBdtPrediction>& realPrediction,
     const std::vector<double>& mcScales,
-    const std::vector<std::string>& backgroundFilesPaths){
+    const std::vector<std::string>& backgroundFilesPaths,
+    const std::string& modelTag = "bdt")
+{
     using IndexSet = std::unordered_set<ULong64_t>;
     using Hist = ROOT::RDF::RResultPtr<TH1D>;
     struct Spec { const char* name; const char* axis; double min, max; };
@@ -1306,8 +1338,8 @@ void CreateBdtRealDataMcComparisonHistograms(
 
     // Category 0 = predicted non-DY; category 1 = predicted DY.
     std::vector<std::shared_ptr<IndexSet>> mcSets{
-        std::make_shared<IndexSet>(mcPrediction.rejectedIndices.begin(), mcPrediction.rejectedIndices.end()),
-        mcPrediction.selectedIndices
+        std::make_shared<IndexSet>(mcRejectedIndices.begin(), mcRejectedIndices.end()),
+        mcSelectedIndices
     };
     std::vector<std::shared_ptr<IndexSet>> realSets{
         std::make_shared<IndexSet>(), std::make_shared<IndexSet>()
@@ -1344,8 +1376,10 @@ void CreateBdtRealDataMcComparisonHistograms(
     for (int category = 0; category < 2; ++category) {
         auto selectedMc = select(mc, mcSets[category]);
         auto selectedData = select(data, realSets[category]);
-        const std::string prefix = category ? "bdt_positive_comparison_" : "bdt_negative_comparison_";
-        const std::string title = category ? "BDT predicted DY" : "BDT predicted non-DY";
+        const std::string prefix = modelTag +
+            (category ? "_positive_comparison_" : "_negative_comparison_");
+        const std::string modelTitle = modelTag == "nn" ? "NN" : "BDT";
+        const std::string title = modelTitle + (category ? " predicted DY" : " predicted non-DY");
 
         for (const auto& spec : specs) {
             const std::string name = prefix + spec.name;
@@ -1476,7 +1510,7 @@ void CreateBdtRealDataMcComparisonHistograms(
 
         const std::string file = "Images/" + plot.name + ".png";
         canvas.SaveAs(file.c_str());
-        logValue("BDT comparison saved", file);
+        logValue(modelTag == "nn" ? "NN comparison saved" : "BDT comparison saved", file);
         logValue(plot.name + " data yield", observed.Integral(0, observed.GetNbinsX() + 1));
         logValue(plot.name + " MC yield", total.Integral(0, total.GetNbinsX() + 1));
         if (negativeBins) logLine(plot.name + ": negative MC bins; sources drawn as unstacked lines.");
@@ -1649,7 +1683,13 @@ void evaluateDrellYanBdt(
     //REAL DATA PREDICTION
     auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realEvaluationDf, weightsFile, methodName, decisionThreshold);
 
-    CreateBdtRealDataMcComparisonHistograms(evaluationDf, realEvaluationDf, mcPrediction, realDataPrediction, mcScales, backgroundFilesPaths);
+        CreateBdtRealDataMcComparisonHistograms(evaluationDf,
+            realEvaluationDf,
+            mcPrediction.selectedIndices,
+            mcPrediction.rejectedIndices,
+            realDataPrediction,
+            mcScales,
+            backgroundFilesPaths);
 
     {
         const size_t total = realDataPrediction.size();
@@ -1668,6 +1708,7 @@ void evaluateDrellYanBdt(
 
 struct NnData {
     torch::Tensor inputs, labels;
+    std::vector<ULong64_t> indices;
     ULong64_t signalEvents = 0, skippedEvents = 0;
 };
 
@@ -1683,10 +1724,9 @@ NnData loadDrellYanNnData(
     const std::string& sampleName)
 {
     if (features.empty()) throw std::runtime_error("NN feature list is empty");
-    if (!df.HasColumn("IsDyProcess"))
-        throw std::runtime_error(sampleName + " dataframe is missing IsDyProcess");
+    if (!df.HasColumn("IsDyProcess") || !df.HasColumn("Index"))
+        throw std::runtime_error(sampleName + " dataframe is missing IsDyProcess or Index");
 
-    //Keep features and label in the same row, including under ROOT multithreading.
     std::string expression = "ROOT::VecOps::RVec<float>{";
     for (const auto& feature : features) {
         if (!df.HasColumn(feature))
@@ -1697,9 +1737,16 @@ NnData loadDrellYanNnData(
 
     std::string rowColumn = "DrellYanNnInputRow";
     while (df.HasColumn(rowColumn)) rowColumn += "_";
+    std::string indexedRowColumn = rowColumn + "WithIndex";
+    while (df.HasColumn(indexedRowColumn)) indexedRowColumn += "_";
 
+    using IndexedRow = std::pair<ROOT::VecOps::RVec<float>, ULong64_t>;
     auto rowsResult = df.Define(rowColumn, expression)
-        .Take<ROOT::VecOps::RVec<float>>(rowColumn);
+        .Define(indexedRowColumn,
+            [](const ROOT::VecOps::RVec<float>& row, ULong64_t index) {
+                return IndexedRow{row, index};
+            }, {rowColumn, "Index"})
+        .Take<IndexedRow>(indexedRowColumn);
     const auto& rows = *rowsResult;
 
     const int64_t numberOfFeatures = static_cast<int64_t>(features.size());
@@ -1708,12 +1755,14 @@ NnData loadDrellYanNnData(
     NnData result;
     result.inputs = torch::empty({static_cast<int64_t>(rows.size()), numberOfFeatures}, options);
     result.labels = torch::empty({static_cast<int64_t>(rows.size()), 1}, options);
+    result.indices.reserve(rows.size());
 
     auto inputs = result.inputs.accessor<float, 2>();
     auto labels = result.labels.accessor<float, 2>();
     int64_t validRows = 0;
 
-    for (const auto& row : rows) {
+    for (const auto& indexedRow : rows) {
+        const auto& row = indexedRow.first;
         if (!std::all_of(row.begin(), row.end(), [](float value) { return std::isfinite(value); })) {
             ++result.skippedEvents;
             continue;
@@ -1721,6 +1770,7 @@ NnData loadDrellYanNnData(
 
         for (int64_t i = 0; i < numberOfFeatures; ++i) inputs[validRows][i] = row[i];
         labels[validRows][0] = row[numberOfFeatures];
+        result.indices.push_back(indexedRow.second);
         if (row[numberOfFeatures] > 0.5f) ++result.signalEvents;
         ++validRows;
     }
@@ -1803,6 +1853,91 @@ DrellYanNn loadDrellYanNn(
     model->eval();
     return model;
 }
+
+
+std::vector<RealDataBdtPrediction> RunRealDataDrellYanNnPrediction(
+    const std::vector<std::string>& features,
+    ROOT::RDF::RNode realDataDf,
+    DrellYanNn model,
+    double decisionThreshold,
+    int64_t batchSize)
+{
+    if (features.empty() || batchSize <= 0 || !realDataDf.HasColumn("Index"))
+        throw std::runtime_error("Invalid NN real-data prediction input");
+
+    std::string expression = "ROOT::VecOps::RVec<float>{";
+    for (size_t i = 0; i < features.size(); ++i) {
+        if (!realDataDf.HasColumn(features[i]))
+            throw std::runtime_error("Missing real-data NN feature: " + features[i]);
+        if (i) expression += ", ";
+        expression += "static_cast<float>(" + features[i] + ")";
+    }
+    expression += "}";
+
+    using InputRow = std::pair<ULong64_t, ROOT::VecOps::RVec<float>>;
+    auto rowsResult = realDataDf
+        .Define("RealDataNnFeatures", expression)
+        .Define("RealDataNnRow",
+            [](ULong64_t index, const ROOT::VecOps::RVec<float>& values) {
+                return InputRow{index, values};
+            }, {"Index", "RealDataNnFeatures"})
+        .Take<InputRow>("RealDataNnRow");
+    const auto& rows = *rowsResult;
+
+    std::vector<RealDataBdtPrediction> result;
+    result.reserve(rows.size());
+    auto inputs = torch::empty(
+        {batchSize, static_cast<int64_t>(features.size())}, torch::kFloat32);
+    auto values = inputs.accessor<float, 2>();
+    std::vector<ULong64_t> batchIndices;
+    batchIndices.reserve(static_cast<size_t>(batchSize));
+    ULong64_t skipped = 0;
+
+    torch::NoGradGuard noGrad;
+    model->eval();
+
+    auto runBatch = [&]() {
+        const int64_t count = static_cast<int64_t>(batchIndices.size());
+        if (count == 0) return;
+
+        auto logits = model->forward(inputs.narrow(0, 0, count));
+        if (!torch::isfinite(logits).all().item<bool>())
+            throw std::runtime_error("NN produced non-finite real-data logits");
+
+        auto probabilities = torch::sigmoid(logits).contiguous();
+        const float* scores = probabilities.data_ptr<float>();
+        for (int64_t i = 0; i < count; ++i)
+            result.push_back({
+                batchIndices[static_cast<size_t>(i)],
+                scores[i],
+                scores[i] >= decisionThreshold
+            });
+        batchIndices.clear();
+    };
+
+    for (const auto& row : rows) {
+        if (row.second.size() != features.size())
+            throw std::runtime_error("Incorrect NN real-data feature count");
+        if (!std::all_of(row.second.begin(), row.second.end(),
+                         [](float value) { return std::isfinite(value); })) {
+            ++skipped;
+            continue;
+        }
+
+        const auto slot = static_cast<int64_t>(batchIndices.size());
+        for (size_t i = 0; i < features.size(); ++i)
+            values[slot][static_cast<int64_t>(i)] = row.second[i];
+        batchIndices.push_back(row.first);
+        if (static_cast<int64_t>(batchIndices.size()) == batchSize) runBatch();
+    }
+    runBatch();
+
+    logValue("NN real-data input events", rows.size());
+    logValue("NN real-data predicted events", result.size());
+    logValue("NN real-data skipped non-finite events", skipped);
+    return result;
+}
+
 
 std::string trainDrellYanNn(
     const std::vector<std::string>& features,
@@ -2002,12 +2137,17 @@ std::string trainDrellYanNn(
 void evaluateDrellYanNn(
     const std::vector<std::string>& features,
     ROOT::RDF::RNode testingDf,
+    ROOT::RDF::RNode realEvaluationDf,
     const std::string& modelFile,
     double decisionThreshold,
     double evaluationUsagePercentage,
+    double histogramUsagePercentage,
+    double falseHistogramUsagePercentage,
     unsigned randomSeed,
     int64_t batchSize,
-    unsigned numberOfThreads)
+    unsigned numberOfThreads,
+    const std::vector<std::string>& backgroundFilesPaths,
+    const std::vector<double>& mcScales)
 {
     std::cout << "evaluateDrellYanNn START\n";
     std::cout << "Model file: " << modelFile << "\n";
@@ -2024,6 +2164,15 @@ void evaluateDrellYanNn(
 
     const ULong64_t keepThreshold = static_cast<ULong64_t>(std::llround(evaluationUsagePercentage * 100.0));
     if (keepThreshold == 0) throw std::runtime_error("Evaluation usage percentage rounds to zero");
+    if (!std::isfinite(histogramUsagePercentage) ||
+        histogramUsagePercentage <= 0.0 || histogramUsagePercentage > 100.0)
+        throw std::runtime_error("Histogram usage percentage must be in (0, 100]");
+    if (!std::isfinite(falseHistogramUsagePercentage) ||
+        falseHistogramUsagePercentage < 0.0 || falseHistogramUsagePercentage > 100.0)
+        throw std::runtime_error("Non-DY histogram usage percentage must be in [0, 100]");
+    for (const char* name : {"Muon_pt", "Muon_eta", "Muon_phi"})
+        if (!testingDf.HasColumn(name))
+            throw std::runtime_error(std::string("NN histogram dataframe is missing ") + name);
 
     const auto useEvaluationEvent = [keepThreshold, randomSeed](ULong64_t index) {
         return mix64(index ^ static_cast<ULong64_t>(randomSeed) ^ 0xd1b54a32d192ed03ULL)
@@ -2053,6 +2202,10 @@ void evaluateDrellYanNn(
     std::vector<std::pair<float, int>> scoredEvents;
     scoredEvents.reserve(static_cast<size_t>(evaluatedEvents));
 
+    auto selectedIndices = std::make_shared<std::unordered_set<ULong64_t>>();
+    std::vector<ULong64_t> rejectedIndices;
+    rejectedIndices.reserve(static_cast<size_t>(evaluatedEvents));
+
     torch::NoGradGuard noGrad;
     model->eval();
 
@@ -2076,6 +2229,10 @@ void evaluateDrellYanNn(
         for (int64_t i = 0; i < count; ++i) {
             const bool isDyProcess = truth[i] > 0.5f;
             const bool predictedDy = scores[i] >= decisionThreshold;
+
+            const ULong64_t index = testing.indices.at(static_cast<size_t>(start + i));
+            if (predictedDy) selectedIndices->insert(index);
+            else rejectedIndices.push_back(index);
 
             if (isDyProcess && predictedDy) ++truePositive;
             else if (!isDyProcess && !predictedDy) ++trueNegative;
@@ -2147,6 +2304,35 @@ void evaluateDrellYanNn(
     logValue("Log-loss", totalLoss / evaluatedEvents);
     logValue("S/sqrt(S+B)", significance);
 
+    const ULong64_t histogramKeepThreshold = static_cast<ULong64_t>(std::llround(histogramUsagePercentage * 100.0));
+    auto histogramDf = evaluationDf.Filter(
+        [histogramKeepThreshold, randomSeed](ULong64_t index) {
+            return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
+        }, {"Index"});
+
+    // CreateBdtPredictionHistograms(histogramDf, selectedIndices, "nn");
+    // CreateBdtFalseHistograms(evaluationDf, rejectedIndices, trueNegative, falseNegative,
+    //                          falseHistogramUsagePercentage, randomSeed, "nn");
+    // CreateBdtDifferenceHistograms(histogramDf, selectedIndices);
+    // CreateBackgroundPredictionHistograms(testingDf, selectedIndices, backgroundFilesPaths);
+    // CreateBdtPositiveSourceHistograms(evaluationDf, selectedIndices, backgroundFilesPaths);
+    // CreateBdtRejectedSourceHistograms(evaluationDf, rejectedIndices, backgroundFilesPaths);
+    // CreateEvaluationDataHistograms(testingDf);
+
+    auto realDataPrediction = RunRealDataDrellYanNnPrediction(
+        features, realEvaluationDf, model, decisionThreshold, batchSize);
+    CreateBdtRealDataMcComparisonHistograms(
+        evaluationDf, realEvaluationDf,
+        selectedIndices, rejectedIndices,
+        realDataPrediction, mcScales, backgroundFilesPaths, "nn");
+
+    const size_t realSelected = static_cast<size_t>(std::count_if(
+        realDataPrediction.begin(), realDataPrediction.end(),
+        [](const RealDataBdtPrediction& event) { return event.predictedDy; }));
+    logLine("\n--- REAL-DATA NN PREDICTION ---");
+    logValue("Real-data events predicted", realDataPrediction.size());
+    logValue("Real-data predicted DY", realSelected);
+    logValue("Real-data predicted non-DY", realDataPrediction.size() - realSelected);
     logElapsedTime("NN evaluation COMPLETE");
     std::cout << "evaluateDrellYanNn END\n";
 }

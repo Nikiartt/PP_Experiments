@@ -740,7 +740,7 @@ void MlRun()
     resetLog();
     gSystem->mkdir("MlTemp", true);
 
-    const unsigned int numberOfThreads = 5;
+    const unsigned int numberOfThreads = 4;
     // ROOT::EnableImplicitMT(numberOfThreads); //The blocks are processed concurrently, and ROOT explicitly says there is no guarantee about processing order. It also specifically warns that under implicit MT, rdfentry_ does not correspond to the original TTree/TChain entry number, and operations such as Take() do not preserve original ordering. SO DONT USE PARALELISM!
 
     const bool DevelopmentMode = true;
@@ -750,7 +750,7 @@ void MlRun()
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
     const double DatasetUsagePercentage = 25.00;
     const double ValidationUsagePercentage = 20.00; // Percent of the selected training sample.
-    const double EvaluationUsagePercentage = 10.00;
+    const double EvaluationUsagePercentage = 100.00;
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -788,7 +788,7 @@ void MlRun()
     const std::vector<std::string> features = getBdtFeatureNames(MaxMuons);
 
     //BDT PARAMETERS
-    const unsigned int numberOfTrees = 5;
+    const unsigned int numberOfTrees = 6;
     const unsigned int maximumDepth = 50;//A depth-three tree can represent interactions among several variables.
     const double minimumNodeSizePercent = 0.001;//This controls how small a tree node is allowed to become.
     const double baggedSampleFraction = 0.05;//It can reduce correlations between trees and decrease overfitting. PVZ Only 20 % is used
@@ -827,8 +827,8 @@ void MlRun()
 
     //NN PARAMETERS
     const bool UseNeuralNetwork = true; //false runs the existing BDT workflow.
-    const std::vector<int64_t> nnHiddenLayers = {64, 32};
-    const unsigned int nnNumberOfEpochs = 10;
+    const std::vector<int64_t> nnHiddenLayers = {32, 64, 32};
+    const unsigned int nnNumberOfEpochs = 5;
     const int64_t nnBatchSize = 1024;
     const double nnLearningRate = 0.001;
     const double nnWeightDecay = 0.0001;
@@ -884,6 +884,14 @@ void MlRun()
         ROOT::RDataFrame validation("Events", validationFile);
         ROOT::RDataFrame evaluation("Events", evaluationFile);
 
+        for (const char* column :
+             {"FILE_CLASSIFICATOR", "HLT_IsoMu24", "genWeight"}) {
+            if (!evaluation.HasColumn(column))
+                throw std::runtime_error(
+                    std::string("Saved MC evaluation file lacks ") + column +
+                    "; regenerate it with PrepareLocalData = true");
+        }
+
         const std::string weights = trainDrellYanNn(
             features, train,
             validation,
@@ -899,14 +907,82 @@ void MlRun()
             numberOfThreads,
             nnDecisionThreshold);
 
-        evaluateDrellYanNn(features,
+        //Real data loading from Online for NN evaluation
+                // The saved-data NN branch returns before the BDT real-data setup below.
+        const auto nnRealFiles = loadFileList(
+            RealDataFilesPath, DevelopmentMode, DevelopmentRealDataFiles);
+        const double nnLuminosityFb = calculateIntegratedLuminosityFb(
+            nnRealFiles, JsonLuminosityPath, LuminosityCsvPath);
+
+        std::vector<std::vector<std::string>> nnMcFilesBySource{
+            loadFileList(DyMainFilesPath, DevelopmentMode, DevelopmentFilesPerSample)
+        };
+        for (const auto& path : BackgroundFilesPaths)
+            nnMcFilesBySource.push_back(
+                loadFileList(path, DevelopmentMode, DevelopmentFilesPerSample));
+
+        const std::vector<double> nnCrossSectionsPb = {
+            5396.0, 687.1, 32.45, 32.51, 75.88, 27.56, 12.08, 54110.0, 2.529e6
+        };
+        if (nnCrossSectionsPb.size() != nnMcFilesBySource.size())
+            throw std::runtime_error("NN MC cross sections do not match the source list");
+
+        std::vector<double> nnMcScales;
+        nnMcScales.reserve(nnMcFilesBySource.size());
+        for (size_t i = 0; i < nnMcFilesBySource.size(); ++i) {
+            const std::string name = i == 0 ? "main_dy" : BackgroundFilesPaths[i - 1];
+            nnMcScales.push_back(calculateNormalization(
+                name, nnMcFilesBySource[i], nnCrossSectionsPb[i], nnLuminosityFb));
+        }
+
+        ROOT::RDataFrame nnRealData("Events", nnRealFiles);
+        auto nnRealWithIndex = nnRealData
+            .DefinePerSample("SourceFileId",
+                [nnRealFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
+                    for (UInt_t i = 0; i < nnRealFiles.size(); ++i)
+                        if (info.Contains(nnRealFiles[i])) return i;
+                    throw std::runtime_error("Cannot determine real-data source file");
+                })
+            .Define("Index",
+                [](UInt_t fileId, UInt_t run, UInt_t lumi, ULong64_t event) {
+                    return makeEventIndex(fileId, run, lumi, event);
+                }, {"SourceFileId", "run", "luminosityBlock", "event"});
+
+        auto nnRealForTesting = nnRealWithIndex.Filter(
+            [trainingFraction](ULong64_t index) {
+                return !(static_cast<double>(index % 100) / 100.0 < trainingFraction);
+            }, {"Index"});
+
+        auto nnFilteredReal = HLT_IsoMu24_pT_n_filter(
+            filterLuminosity(nnRealForTesting, JsonLuminosityPath));
+        auto nnRealFeatures = NormalizeToBdtDataFrame(nnFilteredReal, MaxMuons);
+        if (nnRealFeatures.features != features)
+            throw std::runtime_error("Real-data and NN feature lists differ");
+
+        // The saved MC evaluation file already has this evaluation fraction applied.
+        // Apply the same fraction and seed to real data.
+        const ULong64_t nnRealKeep = static_cast<ULong64_t>(
+            std::llround(EvaluationUsagePercentage * 100.0));
+        auto nnRealEvaluation = nnRealFeatures.df.Filter(
+            [nnRealKeep, nnRandomSeed](ULong64_t index) {
+                return mix64(index ^ static_cast<ULong64_t>(nnRandomSeed) ^
+                             0xd1b54a32d192ed03ULL) % 10000ULL < nnRealKeep;
+            }, {"Index"});
+
+        evaluateDrellYanNn(
+            features,
             evaluation,
+            nnRealEvaluation,
             weights,
             nnDecisionThreshold,
-            100.0, //100%usage of reading file
+            100.0, // Saved MC evaluation file was already sampled.
+            HistogramUsagePercentage,
+            FalseHistogramUsagePercentage,
             nnRandomSeed,
             nnBatchSize,
-            numberOfThreads);
+            numberOfThreads,
+            BackgroundFilesPaths,
+            nnMcScales);
         logElapsedTime("MlRun complete");
         return;
     }
@@ -1042,8 +1118,14 @@ void MlRun()
         };
 
         std::vector<std::string> columns = features;
+        for (const char* name : {"Muon_pt", "Muon_eta", "Muon_phi"})
+            if (std::find(columns.begin(), columns.end(), name) == columns.end())
+                columns.emplace_back(name);
         columns.push_back("Index");
         columns.push_back("IsDyProcess");
+        columns.push_back("FILE_CLASSIFICATOR");
+        columns.push_back("HLT_IsoMu24");
+        columns.push_back("genWeight");
 
         ROOT::RDF::RSnapshotOptions options;
         options.fLazy = true;
@@ -1070,13 +1152,10 @@ void MlRun()
 
     logElapsedTime("Training/testing dataframes created");
 
- 
-    //REAL DATA LOADING
+    logLine("--- REAL DATA LOADING ---");
     const auto realDataFiles = loadFileList(RealDataFilesPath, DevelopmentMode, DevelopmentRealDataFiles);
-
     // Calculate luminosity from all certified blocks in the loaded real-data files.
     const double integratedLuminosityFb = calculateIntegratedLuminosityFb(realDataFiles, JsonLuminosityPath, LuminosityCsvPath);
-
     // Same cross sections and source order as comparisonAnalysis().
     const std::vector<double> crossSectionsPb = {5396.0, 687.1, 32.45, 32.51, 75.88, 27.56, 12.08, 54110.0, 2.529e6}; // DY, ttbar, top-tW, antitop-tW, WW, WZ, ZZ, W+jets, QCD.
 

@@ -1,0 +1,232 @@
+Drell-Yan log
+
+[NN model parameters]
+Method: LibTorch dense neural network
+Device: CPU
+Optimizer: Adam
+Loss: BCEWithLogitsLoss
+Activation: ReLU
+Input normalization: Training mean and standard deviation
+Hidden layers: 3
+Hidden layer 1 neurons: 32
+Hidden layer 2 neurons: 64
+Hidden layer 3 neurons: 32
+Epochs: 5
+Batch size: 1024
+Learning rate: 0.001
+Weight decay: 0.0001
+Dropout probability: 0
+Random seed: 1
+Decision threshold: 0.5
+Model file: MlTemp/DrellYan_NN.pt
+Evaluation usage [%]: 100
+------
+--- TRAINING AND EVALUATION USING SAVED DATA ---
+
+--- NN TRAINING FEATURES ---
+Number of features: 26
+Feature 1: MuonCount
+Feature 2: HLT_IsoMu24_f
+Feature 3: MET_pt
+Feature 4: HasMuonTrigger
+Feature 5: MinMuonTriggerDeltaR2
+Feature 6: MaxMuonTriggerPt
+Feature 7: Muon0_exists
+Feature 8: Muon0_pt
+Feature 9: Muon0_eta
+Feature 10: Muon0_charge
+Feature 11: Muon0_isGlobal
+Feature 12: Muon0_nStations
+Feature 13: Muon0_nTrackerLayers
+Feature 14: Muon0_dxy
+Feature 15: Muon0_ptErr
+Feature 16: Muon0_tkRelIso
+Feature 17: Muon1_exists
+Feature 18: Muon1_pt
+Feature 19: Muon1_eta
+Feature 20: Muon1_charge
+Feature 21: Muon1_isGlobal
+Feature 22: Muon1_nStations
+Feature 23: Muon1_nTrackerLayers
+Feature 24: Muon1_dxy
+Feature 25: Muon1_ptErr
+Feature 26: Muon1_tkRelIso
+
+--- NN TRAINING DATA ---
+NN data loading START elapsed time: 1.20349 s
+NN training input events: 1827736
+NN training valid events: 1827736
+NN training skipped non-finite events: 0
+NN training signal: 54854
+NN training background: 1772882
+NN testing input events: 456093
+NN testing valid events: 456093
+NN testing skipped non-finite events: 0
+NN testing signal: 13732
+NN testing background: 442361
+NN data loading END elapsed time: 13.3061 s
+NN training baseline accuracy (always background): 0.969988
+NN testing baseline accuracy (always background): 0.969892
+
+--- NN TRAINING HISTORY ---
+NN Training START elapsed time: 13.6819 s
+NN epoch: 1
+NN mean training batch loss: 0.0365467
+NN testing loss: 0.0208936
+NN testing precision: 0.853062
+NN epoch: 2
+NN mean training batch loss: 0.0202811
+NN testing loss: 0.0198283
+NN testing precision: 0.869136
+NN epoch: 3
+NN mean training batch loss: 0.0193868
+NN testing loss: 0.0187236
+NN testing precision: 0.863614
+NN epoch: 4
+NN mean training batch loss: 0.0187168
+NN testing loss: 0.0179576
+NN testing precision: 0.875404
+NN epoch: 5
+NN mean training batch loss: 0.0182331
+NN testing loss: 0.0174409
+NN testing precision: 0.871994
+NN Training END elapsed time: 49.3215 s
+Trained NN model: MlTemp/DrellYan_NN.pt
+NN training COMPLETE elapsed time: 49.4091 s
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+Unique certified luminosity blocks: 1471
+Integrated luminosity [fb^-1]: 0.271945
+main_dy cross section [pb]: 5396
+main_dy sum gen weights: 2.61031e+06
+main_dy normalization: 0.562162
+Background_dataset_files/ttbar_xrootd_files.txt cross section [pb]: 687.1
+Background_dataset_files/ttbar_xrootd_files.txt sum gen weights: 1.00679e+08
+Background_dataset_files/ttbar_xrootd_files.txt normalization: 0.00185593
+Background_dataset_files/single_top_tw_xrootd_files.txt cross section [pb]: 32.45
+Background_dataset_files/single_top_tw_xrootd_files.txt sum gen weights: 5.25612e+06
+Background_dataset_files/single_top_tw_xrootd_files.txt normalization: 0.00167892
+Background_dataset_files/single_antitop_tw_xrootd_files.txt cross section [pb]: 32.51
+Background_dataset_files/single_antitop_tw_xrootd_files.txt sum gen weights: 6.82663e+06
+Background_dataset_files/single_antitop_tw_xrootd_files.txt normalization: 0.00129507
+Background_dataset_files/ww_xrootd_files.txt cross section [pb]: 75.88
+Background_dataset_files/ww_xrootd_files.txt sum gen weights: 3.61203e+06
+Background_dataset_files/ww_xrootd_files.txt normalization: 0.00571291
+Background_dataset_files/wz_xrootd_files.txt cross section [pb]: 27.56
+Background_dataset_files/wz_xrootd_files.txt sum gen weights: 1.524e+06
+Background_dataset_files/wz_xrootd_files.txt normalization: 0.00491786
+Background_dataset_files/zz_xrootd_files.txt cross section [pb]: 12.08
+Background_dataset_files/zz_xrootd_files.txt sum gen weights: 65000
+Background_dataset_files/zz_xrootd_files.txt normalization: 0.05054
+Background_dataset_files/wjets_xrootd_files.txt cross section [pb]: 54110
+Background_dataset_files/wjets_xrootd_files.txt sum gen weights: 2.56642e+11
+Background_dataset_files/wjets_xrootd_files.txt normalization: 5.73365e-05
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt cross section [pb]: 2.529e+06
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt sum gen weights: 3.55223e+06
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt normalization: 193.611
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+
+--- NN EVALUATION DATA ---
+Testing dataframe events: 3914476
+Testing dataframe DY events: 118456
+Testing dataframe DY [%]: 3.0261
+NN evaluation input events: 3914476
+NN evaluation valid events: 3914476
+NN evaluation skipped non-finite events: 0
+NN evaluation signal: 118456
+NN evaluation background: 3796020
+
+--- NN evaluation ---
+Model file: MlTemp/DrellYan_NN.pt
+Evaluation usage [%]: 100
+Evaluation random seed: 1
+Evaluation batch size: 1024
+Evaluation threads: 4
+Evaluated events: 3914476
+Model selected events: 122042
+Decision threshold: 0.5
+True positives: 106124
+True negatives: 3.7801e+06
+False positives: 15918
+False negatives: 12332
+Accuracy: 0.992783
+PRECISION: 0.869569
+Recall: 0.895894
+Background rejection: 0.995807
+F1: 0.882535
+ROC AUC: 0.998298
+Log-loss: 0.0177581
+S/sqrt(S+B): 303.78
+NN real-data input events: 156094
+NN real-data predicted events: 156093
+NN real-data skipped non-finite events: 1
+NN comparison saved: Images/nn_negative_comparison_LeadingMuon_pt.png
+nn_negative_comparison_LeadingMuon_pt data yield: 88555
+nn_negative_comparison_LeadingMuon_pt MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_LeadingMuon_eta.png
+nn_negative_comparison_LeadingMuon_eta data yield: 88555
+nn_negative_comparison_LeadingMuon_eta MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_LeadingMuon_phi.png
+nn_negative_comparison_LeadingMuon_phi data yield: 88555
+nn_negative_comparison_LeadingMuon_phi MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_SubleadingMuon_pt.png
+nn_negative_comparison_SubleadingMuon_pt data yield: 88555
+nn_negative_comparison_SubleadingMuon_pt MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_SubleadingMuon_eta.png
+nn_negative_comparison_SubleadingMuon_eta data yield: 88555
+nn_negative_comparison_SubleadingMuon_eta MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_SubleadingMuon_phi.png
+nn_negative_comparison_SubleadingMuon_phi data yield: 88555
+nn_negative_comparison_SubleadingMuon_phi MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_Dimuon_mass.png
+nn_negative_comparison_Dimuon_mass data yield: 88555
+nn_negative_comparison_Dimuon_mass MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_Dimuon_pt.png
+nn_negative_comparison_Dimuon_pt data yield: 88555
+nn_negative_comparison_Dimuon_pt MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_Dimuon_rapidity.png
+nn_negative_comparison_Dimuon_rapidity data yield: 88555
+nn_negative_comparison_Dimuon_rapidity MC yield: 43420
+NN comparison saved: Images/nn_negative_comparison_Dimuon_phi.png
+nn_negative_comparison_Dimuon_phi data yield: 88555
+nn_negative_comparison_Dimuon_phi MC yield: 43420
+NN comparison saved: Images/nn_positive_comparison_LeadingMuon_pt.png
+nn_positive_comparison_LeadingMuon_pt data yield: 67538
+nn_positive_comparison_LeadingMuon_pt MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_LeadingMuon_eta.png
+nn_positive_comparison_LeadingMuon_eta data yield: 67538
+nn_positive_comparison_LeadingMuon_eta MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_LeadingMuon_phi.png
+nn_positive_comparison_LeadingMuon_phi data yield: 67538
+nn_positive_comparison_LeadingMuon_phi MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_SubleadingMuon_pt.png
+nn_positive_comparison_SubleadingMuon_pt data yield: 67538
+nn_positive_comparison_SubleadingMuon_pt MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_SubleadingMuon_eta.png
+nn_positive_comparison_SubleadingMuon_eta data yield: 67538
+nn_positive_comparison_SubleadingMuon_eta MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_SubleadingMuon_phi.png
+nn_positive_comparison_SubleadingMuon_phi data yield: 67538
+nn_positive_comparison_SubleadingMuon_phi MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_Dimuon_mass.png
+nn_positive_comparison_Dimuon_mass data yield: 67538
+nn_positive_comparison_Dimuon_mass MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_Dimuon_pt.png
+nn_positive_comparison_Dimuon_pt data yield: 67538
+nn_positive_comparison_Dimuon_pt MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_Dimuon_rapidity.png
+nn_positive_comparison_Dimuon_rapidity data yield: 67538
+nn_positive_comparison_Dimuon_rapidity MC yield: 61998.5
+NN comparison saved: Images/nn_positive_comparison_Dimuon_phi.png
+nn_positive_comparison_Dimuon_phi data yield: 67538
+nn_positive_comparison_Dimuon_phi MC yield: 61998.5
+
+--- REAL-DATA NN PREDICTION ---
+Real-data events predicted: 156093
+Real-data predicted DY: 67538
+Real-data predicted non-DY: 88555
+NN evaluation COMPLETE elapsed time: 279.931 s
+MlRun complete elapsed time: 279.967 s
