@@ -1,0 +1,355 @@
+Drell-Yan log
+
+[NN model parameters]
+Method: LibTorch dense neural network
+Device: CPU
+Optimizer: Adam
+Loss: BCEWithLogitsLoss
+Activation: ReLU
+Input normalization: Training mean and standard deviation
+Hidden layers: 3
+Hidden layer 1 neurons: 128
+Hidden layer 2 neurons: 64
+Hidden layer 3 neurons: 32
+Epochs: 7
+Batch size: 1024
+Learning rate: 0.0007
+Weight decay: 0.0001
+Dropout probability: 0
+Random seed: 1
+Decision threshold: 0.5
+Model file: MlTemp/DrellYan_NN_0889.pt
+Evaluation usage [%]: 100
+------
+--- TRAINING AND EVALUATION USING SAVED DATA ---
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+Unique certified luminosity blocks: 1471
+Integrated luminosity [fb^-1]: 0.271945
+main_dy cross section [pb]: 5396
+main_dy sum gen weights: 6.82121e+06
+main_dy normalization: 0.215126
+Background_dataset_files/ttbar_xrootd_files.txt cross section [pb]: 687.1
+Background_dataset_files/ttbar_xrootd_files.txt sum gen weights: 2.44751e+08
+Background_dataset_files/ttbar_xrootd_files.txt normalization: 0.000763445
+Background_dataset_files/single_top_tw_xrootd_files.txt cross section [pb]: 32.45
+Background_dataset_files/single_top_tw_xrootd_files.txt sum gen weights: 7.9166e+06
+Background_dataset_files/single_top_tw_xrootd_files.txt normalization: 0.0011147
+Background_dataset_files/single_antitop_tw_xrootd_files.txt cross section [pb]: 32.51
+Background_dataset_files/single_antitop_tw_xrootd_files.txt sum gen weights: 1.29379e+07
+Background_dataset_files/single_antitop_tw_xrootd_files.txt normalization: 0.000683339
+Background_dataset_files/ww_xrootd_files.txt cross section [pb]: 75.88
+Background_dataset_files/ww_xrootd_files.txt sum gen weights: 3.61803e+06
+Background_dataset_files/ww_xrootd_files.txt normalization: 0.00570343
+Background_dataset_files/wz_xrootd_files.txt cross section [pb]: 27.56
+Background_dataset_files/wz_xrootd_files.txt sum gen weights: 2.127e+06
+Background_dataset_files/wz_xrootd_files.txt normalization: 0.00352365
+Background_dataset_files/zz_xrootd_files.txt cross section [pb]: 12.08
+Background_dataset_files/zz_xrootd_files.txt sum gen weights: 119000
+Background_dataset_files/zz_xrootd_files.txt normalization: 0.0276059
+Background_dataset_files/wjets_xrootd_files.txt cross section [pb]: 54110
+Background_dataset_files/wjets_xrootd_files.txt sum gen weights: 4.19497e+11
+Background_dataset_files/wjets_xrootd_files.txt normalization: 3.50777e-05
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt cross section [pb]: 2.529e+06
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt sum gen weights: 6.1863e+06
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt normalization: 111.173
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+
+--- NN EVALUATION DATA ---
+Testing dataframe events: 6181964
+Testing dataframe DY events: 309625
+Testing dataframe DY [%]: 5.00852
+NN evaluation input events: 6181964
+NN evaluation valid events: 6181962
+NN evaluation skipped non-finite events: 2
+NN evaluation signal: 309625
+NN evaluation background: 5872337
+
+--- NN evaluation ---
+Model file: MlTemp/DrellYan_NN_0889.pt
+Evaluation usage [%]: 100
+Evaluation random seed: 1
+Evaluation batch size: 1024
+Evaluation threads: 4
+Evaluated events: 6181962
+Model selected events: 294286
+Decision threshold: 0.5
+True positives: 272257
+True negatives: 5.85031e+06
+False positives: 22029
+False negatives: 37368
+Accuracy: 0.990392
+PRECISION: 0.925144
+Recall: 0.879312
+Background rejection: 0.996249
+F1: 0.901646
+ROC AUC: 0.998289
+Log-loss: 0.0241935
+S/sqrt(S+B): 501.873
+
+--- CREATE HISTOGRAMS ---
+Events used for histograms: 294286
+Evaluation histogram saved: Images/bdt_predicted_LeadingMuon_pt.png
+Evaluation histogram saved: Images/bdt_predicted_LeadingMuon_eta.png
+Evaluation histogram saved: Images/bdt_predicted_LeadingMuon_phi.png
+Evaluation histogram saved: Images/bdt_predicted_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/bdt_predicted_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/bdt_predicted_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_mass.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_mass_log.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_pt.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_rapidity.png
+Evaluation histogram saved: Images/bdt_predicted_Dimuon_phi.png
+
+--- CREATE MODEL FALSE HISTOGRAMS ---
+Non-DY histogram usage [%]: 100
+Evaluated non-DY predictions: 5.88768e+06
+Sampled non-DY predictions before muon requirements: 5887676
+Sampled non-DY events with at least two muons: 702300
+Evaluation histogram saved: Images/model_false_LeadingMuon_pt.png
+Evaluation histogram saved: Images/model_false_LeadingMuon_eta.png
+Evaluation histogram saved: Images/model_false_LeadingMuon_phi.png
+Evaluation histogram saved: Images/model_false_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/model_false_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/model_false_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/model_false_Dimuon_mass.png
+Evaluation histogram saved: Images/model_false_Dimuon_pt.png
+Evaluation histogram saved: Images/model_false_Dimuon_rapidity.png
+Evaluation histogram saved: Images/model_false_Dimuon_phi.png
+
+--- CREATE MODEL DIFFERENCE HISTOGRAMS ---
+Hard-filter DY events missed by model: 37368
+Evaluation histogram saved: Images/model_diff_LeadingMuon_pt.png
+Evaluation histogram saved: Images/model_diff_LeadingMuon_eta.png
+Evaluation histogram saved: Images/model_diff_LeadingMuon_phi.png
+Evaluation histogram saved: Images/model_diff_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/model_diff_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/model_diff_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/model_diff_Dimuon_mass.png
+Evaluation histogram saved: Images/model_diff_Dimuon_pt.png
+Evaluation histogram saved: Images/model_diff_Dimuon_rapidity.png
+Evaluation histogram saved: Images/model_diff_Dimuon_phi.png
+ttbar background predicted as DY: 10783
+Evaluation histogram saved: Images/ttbar_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/ttbar_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/ttbar_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/ttbar_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/ttbar_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/ttbar_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/ttbar_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/ttbar_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/ttbar_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/ttbar_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/ttbar_model_true_Dimuon_mass_log.png
+single_top_tw background predicted as DY: 145
+Evaluation histogram saved: Images/single_top_tw_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/single_top_tw_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/single_top_tw_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/single_top_tw_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/single_top_tw_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/single_top_tw_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/single_top_tw_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/single_top_tw_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/single_top_tw_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/single_top_tw_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/single_top_tw_model_true_Dimuon_mass_log.png
+single_antitop_tw background predicted as DY: 235
+Evaluation histogram saved: Images/single_antitop_tw_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/single_antitop_tw_model_true_Dimuon_mass_log.png
+ww background predicted as DY: 2512
+Evaluation histogram saved: Images/ww_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/ww_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/ww_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/ww_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/ww_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/ww_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/ww_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/ww_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/ww_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/ww_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/ww_model_true_Dimuon_mass_log.png
+wz background predicted as DY: 7280
+Evaluation histogram saved: Images/wz_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/wz_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/wz_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/wz_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/wz_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/wz_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/wz_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/wz_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/wz_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/wz_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/wz_model_true_Dimuon_mass_log.png
+zz background predicted as DY: 848
+Evaluation histogram saved: Images/zz_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/zz_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/zz_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/zz_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/zz_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/zz_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/zz_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/zz_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/zz_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/zz_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/zz_model_true_Dimuon_mass_log.png
+wjets background predicted as DY: 222
+Evaluation histogram saved: Images/wjets_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/wjets_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/wjets_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/wjets_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/wjets_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/wjets_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/wjets_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/wjets_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/wjets_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/wjets_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/wjets_model_true_Dimuon_mass_log.png
+qcd_pt20to30 background predicted as DY: 4
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_LeadingMuon_pt.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_LeadingMuon_eta.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_LeadingMuon_phi.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_Dimuon_mass.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_Dimuon_pt.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_Dimuon_rapidity.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_Dimuon_phi.png
+Evaluation histogram saved: Images/qcd_pt20to30_model_true_Dimuon_mass_log.png
+BDT predicted DY by source - main_dy: 272257
+BDT predicted DY by source - ttbar: 10783
+BDT predicted DY by source - single_top_tw: 145
+BDT predicted DY by source - single_antitop_tw: 235
+BDT predicted DY by source - ww: 2512
+BDT predicted DY by source - wz: 7280
+BDT predicted DY by source - zz: 848
+BDT predicted DY by source - wjets: 222
+BDT predicted DY by source - qcd_pt20to30: 4
+Source stacked histogram saved: Images/bdt_positive_sources_LeadingMuon_pt.png
+Source stacked histogram saved: Images/bdt_positive_sources_LeadingMuon_eta.png
+Source stacked histogram saved: Images/bdt_positive_sources_LeadingMuon_phi.png
+Source stacked histogram saved: Images/bdt_positive_sources_SubleadingMuon_pt.png
+Source stacked histogram saved: Images/bdt_positive_sources_SubleadingMuon_eta.png
+Source stacked histogram saved: Images/bdt_positive_sources_SubleadingMuon_phi.png
+Source stacked histogram saved: Images/bdt_positive_sources_Dimuon_mass.png
+Source stacked histogram saved: Images/bdt_positive_sources_Dimuon_pt.png
+Source stacked histogram saved: Images/bdt_positive_sources_Dimuon_rapidity.png
+Source stacked histogram saved: Images/bdt_positive_sources_Dimuon_phi.png
+Source stacked histogram saved: Images/bdt_positive_sources_Dimuon_mass_log.png
+BDT rejected as non-DY by source - main_dy: 37368
+BDT rejected as non-DY by source - ttbar: 322879
+BDT rejected as non-DY by source - single_top_tw: 10587
+BDT rejected as non-DY by source - single_antitop_tw: 17329
+BDT rejected as non-DY by source - ww: 49142
+BDT rejected as non-DY by source - wz: 32698
+BDT rejected as non-DY by source - zz: 2230
+BDT rejected as non-DY by source - wjets: 28196
+BDT rejected as non-DY by source - qcd_pt20to30: 201871
+Source stacked histogram saved: Images/bdt_rejected_sources_LeadingMuon_pt.png
+Source stacked histogram saved: Images/bdt_rejected_sources_LeadingMuon_eta.png
+Source stacked histogram saved: Images/bdt_rejected_sources_LeadingMuon_phi.png
+Source stacked histogram saved: Images/bdt_rejected_sources_SubleadingMuon_pt.png
+Source stacked histogram saved: Images/bdt_rejected_sources_SubleadingMuon_eta.png
+Source stacked histogram saved: Images/bdt_rejected_sources_SubleadingMuon_phi.png
+Source stacked histogram saved: Images/bdt_rejected_sources_Dimuon_mass.png
+Source stacked histogram saved: Images/bdt_rejected_sources_Dimuon_pt.png
+Source stacked histogram saved: Images/bdt_rejected_sources_Dimuon_rapidity.png
+Source stacked histogram saved: Images/bdt_rejected_sources_Dimuon_phi.png
+Source stacked histogram saved: Images/bdt_rejected_sources_Dimuon_mass_log.png
+Events passed into evaluation: 6181964
+Input events with at least two muons: 996588
+Evaluation histogram saved: Images/unfiltered_LeadingMuon_pt.png
+Evaluation histogram saved: Images/unfiltered_LeadingMuon_eta.png
+Evaluation histogram saved: Images/unfiltered_LeadingMuon_phi.png
+Evaluation histogram saved: Images/unfiltered_SubleadingMuon_pt.png
+Evaluation histogram saved: Images/unfiltered_SubleadingMuon_eta.png
+Evaluation histogram saved: Images/unfiltered_SubleadingMuon_phi.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_mass.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_pt.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_rapidity.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_phi.png
+Evaluation histogram saved: Images/unfiltered_Dimuon_mass_log.png
+NN real-data input events: 156094
+NN real-data predicted events: 156093
+NN real-data skipped non-finite events: 1
+NN comparison saved: Images/nn_negative_comparison_LeadingMuon_pt.png
+nn_negative_comparison_LeadingMuon_pt data yield: 92332
+nn_negative_comparison_LeadingMuon_pt MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_LeadingMuon_eta.png
+nn_negative_comparison_LeadingMuon_eta data yield: 92332
+nn_negative_comparison_LeadingMuon_eta MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_LeadingMuon_phi.png
+nn_negative_comparison_LeadingMuon_phi data yield: 92332
+nn_negative_comparison_LeadingMuon_phi MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_SubleadingMuon_pt.png
+nn_negative_comparison_SubleadingMuon_pt data yield: 92332
+nn_negative_comparison_SubleadingMuon_pt MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_SubleadingMuon_eta.png
+nn_negative_comparison_SubleadingMuon_eta data yield: 92332
+nn_negative_comparison_SubleadingMuon_eta MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_SubleadingMuon_phi.png
+nn_negative_comparison_SubleadingMuon_phi data yield: 92332
+nn_negative_comparison_SubleadingMuon_phi MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_Dimuon_mass.png
+NN comparison saved: Images/nn_negative_comparison_Dimuon_mass_log.png
+nn_negative_comparison_Dimuon_mass data yield: 92332
+nn_negative_comparison_Dimuon_mass MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_Dimuon_pt.png
+nn_negative_comparison_Dimuon_pt data yield: 92332
+nn_negative_comparison_Dimuon_pt MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_Dimuon_rapidity.png
+nn_negative_comparison_Dimuon_rapidity data yield: 92332
+nn_negative_comparison_Dimuon_rapidity MC yield: 44207.9
+NN comparison saved: Images/nn_negative_comparison_Dimuon_phi.png
+nn_negative_comparison_Dimuon_phi data yield: 92332
+nn_negative_comparison_Dimuon_phi MC yield: 44207.9
+NN comparison saved: Images/nn_positive_comparison_LeadingMuon_pt.png
+nn_positive_comparison_LeadingMuon_pt data yield: 63761
+nn_positive_comparison_LeadingMuon_pt MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_LeadingMuon_eta.png
+nn_positive_comparison_LeadingMuon_eta data yield: 63761
+nn_positive_comparison_LeadingMuon_eta MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_LeadingMuon_phi.png
+nn_positive_comparison_LeadingMuon_phi data yield: 63761
+nn_positive_comparison_LeadingMuon_phi MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_SubleadingMuon_pt.png
+nn_positive_comparison_SubleadingMuon_pt data yield: 63761
+nn_positive_comparison_SubleadingMuon_pt MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_SubleadingMuon_eta.png
+nn_positive_comparison_SubleadingMuon_eta data yield: 63761
+nn_positive_comparison_SubleadingMuon_eta MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_SubleadingMuon_phi.png
+nn_positive_comparison_SubleadingMuon_phi data yield: 63761
+nn_positive_comparison_SubleadingMuon_phi MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_Dimuon_mass.png
+NN comparison saved: Images/nn_positive_comparison_Dimuon_mass_log.png
+nn_positive_comparison_Dimuon_mass data yield: 63761
+nn_positive_comparison_Dimuon_mass MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_Dimuon_pt.png
+nn_positive_comparison_Dimuon_pt data yield: 63761
+nn_positive_comparison_Dimuon_pt MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_Dimuon_rapidity.png
+nn_positive_comparison_Dimuon_rapidity data yield: 63761
+nn_positive_comparison_Dimuon_rapidity MC yield: 60602.6
+NN comparison saved: Images/nn_positive_comparison_Dimuon_phi.png
+nn_positive_comparison_Dimuon_phi data yield: 63761
+nn_positive_comparison_Dimuon_phi MC yield: 60602.6
+
+--- REAL-DATA NN PREDICTION ---
+Real-data events predicted: 156093
+Real-data predicted DY: 63761
+Real-data predicted non-DY: 92332
+NN evaluation COMPLETE elapsed time: 627.206 s
+MlRun complete elapsed time: 627.292 s

@@ -1511,6 +1511,36 @@ void CreateBdtRealDataMcComparisonHistograms(
         const std::string file = "Images/" + plot.name + ".png";
         canvas.SaveAs(file.c_str());
         logValue(modelTag == "nn" ? "NN comparison saved" : "BDT comparison saved", file);
+
+        if (plot.name.find("_Dimuon_mass") != std::string::npos) {
+            double minPositive = std::numeric_limits<double>::infinity();
+            auto scanPositiveBins = [&minPositive](const TH1D& hist) {
+                for (int bin = 1; bin <= hist.GetNbinsX(); ++bin) {
+                    const double value = hist.GetBinContent(bin);
+                    if (std::isfinite(value) && value > 0.0)
+                        minPositive = std::min(minPositive, value);
+                }
+            };
+
+            scanPositiveBins(observed);
+            scanPositiveBins(total);
+            for (auto& hist : plot.mc) scanPositiveBins(*hist.GetPtr());
+
+            if (std::isfinite(minPositive)) {
+                upper.cd();
+                upper.SetLogy();
+                stack.SetMinimum(minPositive * 0.5);
+                stack.SetMaximum(std::max(maxY * 5.0, minPositive * 10.0));
+                upper.Modified();
+                upper.Update();
+
+                const std::string logFile = "Images/" + plot.name + "_log.png";
+                canvas.SaveAs(logFile.c_str());
+                logValue(modelTag == "nn" ? "NN comparison saved" : "BDT comparison saved", logFile);
+                if (negativeBins)
+                    logLine(plot.name + ": non-positive MC bins are not visible on the log scale.");
+            }
+        }
         logValue(plot.name + " data yield", observed.Integral(0, observed.GetNbinsX() + 1));
         logValue(plot.name + " MC yield", total.Integral(0, total.GetNbinsX() + 1));
         if (negativeBins) logLine(plot.name + ": negative MC bins; sources drawn as unstacked lines.");
@@ -2310,7 +2340,7 @@ void evaluateDrellYanNn(
             return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
         }, {"Index"});
 
-    // CreateBdtPredictionHistograms(histogramDf, selectedIndices, "nn");
+    // CreateBdtPredictionHistograms(histogramDf, selectedIndices, "nn"); //Not needed
     // CreateBdtFalseHistograms(evaluationDf, rejectedIndices, trueNegative, falseNegative,
     //                          falseHistogramUsagePercentage, randomSeed, "nn");
     // CreateBdtDifferenceHistograms(histogramDf, selectedIndices);

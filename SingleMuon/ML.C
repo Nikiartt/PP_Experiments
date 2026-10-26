@@ -744,11 +744,11 @@ void MlRun()
     // ROOT::EnableImplicitMT(numberOfThreads); //The blocks are processed concurrently, and ROOT explicitly says there is no guarantee about processing order. It also specifically warns that under implicit MT, rdfentry_ does not correspond to the original TTree/TChain entry number, and operations such as Take() do not preserve original ordering. SO DONT USE PARALELISM!
 
     const bool DevelopmentMode = true;
-    const size_t DevelopmentFilesPerSample = 2;
+    const size_t DevelopmentFilesPerSample = 4;
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 25.00;
+    const double DatasetUsagePercentage = 50.00;
     const double ValidationUsagePercentage = 20.00; // Percent of the selected training sample.
     const double EvaluationUsagePercentage = 100.00;
     const double HistogramUsagePercentage = 100.00;
@@ -824,18 +824,22 @@ void MlRun()
     // nnBatchSize = 512 Epoch 7/10 training loss: 0.0181285 testing loss: 0.0186336 testing precision: 0.896248 logNN68.txt
     //nnBatchSize = 256 precision: 0.885652 logNN70.txt
     //nnBatchSize = 32 nothing special testing precision: 0.853988 logNN71.txt
+    //Increased testing to 100% nnHiddenLayers = {64, 64, 32};, nnNumberOfEpochs = 10; precision: 0.886307 epoch7 logNN72.txt
+    // nnHiddenLayers = {128, 64, 32}; nnBatchSize = 512; precision: 0.886347 logNN73.txt
+    // reduce nnLearningRate = 0.0007; nnBatchSize = 1024; and increase training data tp 50 % and validation same 20% evaluation 100% epoch7 precision: 0.889155 logNN74.txt
+    // INCREASING THE AMOUNT OF DATA UP TO 4 FILES THEN PRECISION RISES TO PRECISION: 0.925144! (previous training on 2 filespersample) 
 
     //NN PARAMETERS
     const bool UseNeuralNetwork = true; //false runs the existing BDT workflow.
-    const std::vector<int64_t> nnHiddenLayers = {32, 64, 32};
-    const unsigned int nnNumberOfEpochs = 5;
+    const std::vector<int64_t> nnHiddenLayers = {128, 64, 32};
+    const unsigned int nnNumberOfEpochs = 7;
     const int64_t nnBatchSize = 1024;
-    const double nnLearningRate = 0.001;
+    const double nnLearningRate = 0.0007;
     const double nnWeightDecay = 0.0001;
     const double nnDropoutProbability = 0.00;
     const unsigned int nnRandomSeed = 1;
     const double nnDecisionThreshold = 0.5;
-    const std::string nnModelFile = "MlTemp/DrellYan_NN.pt";
+    const std::string nnModelFile = "MlTemp/DrellYan_NN_0889.pt";
 
     if (UseNeuralNetwork) {
         logLine("[NN model parameters]");
@@ -892,20 +896,20 @@ void MlRun()
                     "; regenerate it with PrepareLocalData = true");
         }
 
-        const std::string weights = trainDrellYanNn(
-            features, train,
-            validation,
-            nnModelFile,
-            nnHiddenLayers,
-            nnNumberOfEpochs,
-            nnBatchSize,
-            nnLearningRate,
-            nnWeightDecay,
-            nnDropoutProbability,
-            nnRandomSeed,
-            100.0,//100%usage of reading file
-            numberOfThreads,
-            nnDecisionThreshold);
+        // const std::string weights = trainDrellYanNn(
+        //     features, train,
+        //     validation,
+        //     nnModelFile,
+        //     nnHiddenLayers,
+        //     nnNumberOfEpochs,
+        //     nnBatchSize,
+        //     nnLearningRate,
+        //     nnWeightDecay,
+        //     nnDropoutProbability,
+        //     nnRandomSeed,
+        //     100.0,//100%usage of reading file
+        //     numberOfThreads,
+        //     nnDecisionThreshold);
 
         //Real data loading from Online for NN evaluation
                 // The saved-data NN branch returns before the BDT real-data setup below.
@@ -973,7 +977,8 @@ void MlRun()
             features,
             evaluation,
             nnRealEvaluation,
-            weights,
+            // weights,
+            "MlTemp/DrellYan_NN_0889.pt",
             nnDecisionThreshold,
             100.0, // Saved MC evaluation file was already sampled.
             HistogramUsagePercentage,

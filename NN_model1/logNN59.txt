@@ -1,0 +1,178 @@
+Drell-Yan log
+
+[NN model parameters]
+Method: LibTorch dense neural network
+Device: CPU
+Optimizer: Adam
+Loss: BCEWithLogitsLoss
+Activation: ReLU
+Input normalization: Training mean and standard deviation
+Hidden layers: 2
+Hidden layer 1 neurons: 128
+Hidden layer 2 neurons: 64
+Epochs: 10
+Batch size: 1024
+Learning rate: 0.01
+Weight decay: 0.0001
+Dropout probability: 0
+Random seed: 1
+Decision threshold: 0.5
+Model file: MlTemp/DrellYan_NN.pt
+Dataset usage [%]: 5
+Evaluation usage [%]: 5
+------
+--- CREATE TRAINING AND TESTING DATA ---
+Training/testing dataframes created elapsed time: 20.3553 s
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+Unique certified luminosity blocks: 1471
+Integrated luminosity [fb^-1]: 0.271945
+main_dy cross section [pb]: 5396
+main_dy sum gen weights: 2.61031e+06
+main_dy normalization: 0.562162
+Background_dataset_files/ttbar_xrootd_files.txt cross section [pb]: 687.1
+Background_dataset_files/ttbar_xrootd_files.txt sum gen weights: 1.00679e+08
+Background_dataset_files/ttbar_xrootd_files.txt normalization: 0.00185593
+Background_dataset_files/single_top_tw_xrootd_files.txt cross section [pb]: 32.45
+Background_dataset_files/single_top_tw_xrootd_files.txt sum gen weights: 5.25612e+06
+Background_dataset_files/single_top_tw_xrootd_files.txt normalization: 0.00167892
+Background_dataset_files/single_antitop_tw_xrootd_files.txt cross section [pb]: 32.51
+Background_dataset_files/single_antitop_tw_xrootd_files.txt sum gen weights: 6.82663e+06
+Background_dataset_files/single_antitop_tw_xrootd_files.txt normalization: 0.00129507
+Background_dataset_files/ww_xrootd_files.txt cross section [pb]: 75.88
+Background_dataset_files/ww_xrootd_files.txt sum gen weights: 3.61203e+06
+Background_dataset_files/ww_xrootd_files.txt normalization: 0.00571291
+Background_dataset_files/wz_xrootd_files.txt cross section [pb]: 27.56
+Background_dataset_files/wz_xrootd_files.txt sum gen weights: 1.524e+06
+Background_dataset_files/wz_xrootd_files.txt normalization: 0.00491786
+Background_dataset_files/zz_xrootd_files.txt cross section [pb]: 12.08
+Background_dataset_files/zz_xrootd_files.txt sum gen weights: 65000
+Background_dataset_files/zz_xrootd_files.txt normalization: 0.05054
+Background_dataset_files/wjets_xrootd_files.txt cross section [pb]: 54110
+Background_dataset_files/wjets_xrootd_files.txt sum gen weights: 2.56642e+11
+Background_dataset_files/wjets_xrootd_files.txt normalization: 5.73365e-05
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt cross section [pb]: 2.529e+06
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt sum gen weights: 3.55223e+06
+Background_dataset_files/qcd_pt20to30_xrootd_files.txt normalization: 193.611
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+
+--- NN TRAINING FEATURES ---
+Number of features: 26
+Feature 1: MuonCount
+Feature 2: HLT_IsoMu24_f
+Feature 3: MET_pt
+Feature 4: HasMuonTrigger
+Feature 5: MinMuonTriggerDeltaR2
+Feature 6: MaxMuonTriggerPt
+Feature 7: Muon0_exists
+Feature 8: Muon0_pt
+Feature 9: Muon0_eta
+Feature 10: Muon0_charge
+Feature 11: Muon0_isGlobal
+Feature 12: Muon0_nStations
+Feature 13: Muon0_nTrackerLayers
+Feature 14: Muon0_dxy
+Feature 15: Muon0_ptErr
+Feature 16: Muon0_tkRelIso
+Feature 17: Muon1_exists
+Feature 18: Muon1_pt
+Feature 19: Muon1_eta
+Feature 20: Muon1_charge
+Feature 21: Muon1_isGlobal
+Feature 22: Muon1_nStations
+Feature 23: Muon1_nTrackerLayers
+Feature 24: Muon1_dxy
+Feature 25: Muon1_ptErr
+Feature 26: Muon1_tkRelIso
+
+--- NN TRAINING DATA ---
+NN data loading START elapsed time: 47.304 s
+NN training input events: 456421
+NN training valid events: 456421
+NN training skipped non-finite events: 0
+NN training signal: 13822
+NN training background: 442599
+NN testing input events: 195806
+NN testing valid events: 195806
+NN testing skipped non-finite events: 0
+NN testing signal: 5965
+NN testing background: 189841
+NN data loading END elapsed time: 197.516 s
+NN training baseline accuracy (always background): 0.969717
+NN testing baseline accuracy (always background): 0.969536
+
+--- NN TRAINING HISTORY ---
+NN optimization START elapsed time: 197.711 s
+NN epoch: 1
+NN mean training batch loss: 0.0301897
+NN testing loss: 0.0230688
+NN epoch: 2
+NN mean training batch loss: 0.0224261
+NN testing loss: 0.0216777
+NN epoch: 3
+NN mean training batch loss: 0.0218632
+NN testing loss: 0.021703
+NN epoch: 4
+NN mean training batch loss: 0.0215764
+NN testing loss: 0.021524
+NN epoch: 5
+NN mean training batch loss: 0.0214061
+NN testing loss: 0.0219766
+NN epoch: 6
+NN mean training batch loss: 0.0211308
+NN testing loss: 0.0207709
+NN epoch: 7
+NN mean training batch loss: 0.020879
+NN testing loss: 0.0214164
+NN epoch: 8
+NN mean training batch loss: 0.0209487
+NN testing loss: 0.0208079
+NN epoch: 9
+NN mean training batch loss: 0.0206683
+NN testing loss: 0.021088
+NN epoch: 10
+NN mean training batch loss: 0.0206584
+NN testing loss: 0.021397
+NN optimization END elapsed time: 326.525 s
+Trained NN model: MlTemp/DrellYan_NN.pt
+NN training COMPLETE elapsed time: 326.637 s
+Trained model: MlTemp/DrellYan_NN.pt
+NN training END elapsed time: 326.696 s
+
+--- NN EVALUATION DATA ---
+Testing dataframe events: 3914476
+Testing dataframe DY events: 118456
+Testing dataframe DY [%]: 3.0261
+NN evaluation input events: 195276
+NN evaluation valid events: 195276
+NN evaluation skipped non-finite events: 0
+NN evaluation signal: 5856
+NN evaluation background: 189420
+
+--- NN evaluation ---
+Model file: MlTemp/DrellYan_NN.pt
+Evaluation usage [%]: 5
+Evaluation random seed: 1
+Evaluation batch size: 1024
+Evaluation threads: 5
+Evaluated events: 195276
+Model selected events: 6106
+Decision threshold: 0.5
+True positives: 5169
+True negatives: 188483
+False positives: 937
+False negatives: 687
+Accuracy: 0.991684
+PRECISION: 0.846544
+Recall: 0.882684
+Background rejection: 0.995053
+F1: 0.864237
+ROC AUC: 0.997323
+Log-loss: 0.020631
+S/sqrt(S+B): 66.1497
+NN evaluation COMPLETE elapsed time: 420.945 s
+NN evaluation END elapsed time: 420.979 s
+MlRun complete elapsed time: 421.007 s
