@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <iomanip>
 #include <set>
+#include <TParameter.h>
 
 static const std::string LOG_FILE = "log.txt";
 using Clock = std::chrono::steady_clock;
@@ -686,6 +687,195 @@ double calculateNormalization(const std::string& sampleName, const std::vector<s
     return scale;
 }
 
+struct MlFractionPlotSpec {
+    std::string name, column, title, xTitle;
+    int bins;
+    double xMin, xMax;
+};
+
+struct MlFractionSample {
+    UInt_t id;
+    std::string name;
+    int color;
+};
+
+// void createMlMcRealDataFractionPlots(
+//     ROOT::RDF::RNode savedEvaluation,
+//     ROOT::RDF::RNode realTestData,
+//     const std::vector<double>& mcScales,
+//     double trainingFraction)
+// {
+//     if (mcScales.size() != 9)
+//         throw std::runtime_error("Expected normalization scales for 9 MC sources");
+//     if (trainingFraction < 0.0 || trainingFraction >= 1.0)
+//         throw std::runtime_error("trainingFraction must be in the range [0, 1)");
+
+//     const double testSplitCorrection = 1.0 / (1.0 - trainingFraction);
+//     const std::vector<MlFractionSample> samples = {
+//         {1, "main_dy", kAzure - 9},
+//         {2, "ttbar", kOrange - 3},
+//         {3, "single_top_tw", kGreen + 2},
+//         {4, "single_antitop_tw", kSpring - 6},
+//         {5, "ww", kViolet - 6},
+//         {6, "wz", kMagenta - 7},
+//         {7, "zz", kRed - 7},
+//         {8, "wjets", kCyan - 6},
+//         {9, "qcd_pt20to30", kGray + 1}
+//     };
+
+//     const std::vector<MlFractionPlotSpec> specs = {
+//         {"LeadingMuon_pt", "LeadingMuon_pt", "Leading muon pT", "Leading muon pT [GeV]", 100, 0, 140},
+//         {"LeadingMuon_eta", "LeadingMuon_eta", "Leading muon eta", "Leading muon eta", 100, -2.4, 2.4},
+//         {"LeadingMuon_phi", "LeadingMuon_phi", "Leading muon phi", "Leading muon phi [rad]", 100, -3.2, 3.2},
+//         {"SubleadingMuon_pt", "SubleadingMuon_pt", "Subleading muon pT", "Subleading muon pT [GeV]", 100, 0, 140},
+//         {"SubleadingMuon_eta", "SubleadingMuon_eta", "Subleading muon eta", "Subleading muon eta", 100, -2.4, 2.4},
+//         {"SubleadingMuon_phi", "SubleadingMuon_phi", "Subleading muon phi", "Subleading muon phi [rad]", 100, -3.2, 3.2},
+//         {"Dimuon_mass", "Dimuon_mass", "Dimuon invariant mass", "Dimuon mass [GeV]", 100, 50, 150},
+//         {"Dimuon_pt", "Dimuon_pt", "Dimuon pT", "Dimuon pT [GeV]", 100, 0, 200},
+//         {"Dimuon_rapidity", "Dimuon_rapidity", "Dimuon rapidity", "Dimuon rapidity", 100, -3, 3},
+//         {"Dimuon_phi", "Dimuon_phi", "Dimuon phi", "Dimuon phi [rad]", 100, -3.2, 3.2},
+//         {"Muon_pt", "Muon_pt", "Muon pT", "Muon pT [GeV]", 100, 0, 140}
+//     };
+
+//     auto realPlot = makeMuonAndDimuonKinematicsDataFrame(
+//         HLT_IsoMu24_pT_n_filter(realTestData));
+
+//     auto mcPlot = makeMuonAndDimuonKinematicsDataFrame(
+//         HLT_IsoMu24_pT_n_filter(savedEvaluation))
+//         .Define("sampleNormalization",
+//             [mcScales, testSplitCorrection](UInt_t sourceId) {
+//                 if (sourceId < 1 || sourceId > mcScales.size())
+//                     throw std::runtime_error("Invalid FILE_CLASSIFICATOR in saved MC data");
+//                 return mcScales[sourceId - 1] * testSplitCorrection;
+//             }, {"FILE_CLASSIFICATOR"})
+//         .Define("eventWeight", "static_cast<double>(genWeight) * sampleNormalization");
+
+//     struct Plot {
+//         MlFractionPlotSpec spec;
+//         ROOT::RDF::RResultPtr<TH1D> realHist;
+//         std::vector<ROOT::RDF::RResultPtr<TH1D>> mcHists;
+//     };
+
+//     std::vector<Plot> plots;
+//     std::vector<ROOT::RDF::RResultHandle> handles;
+
+//     for (const auto& spec : specs) {
+//         const std::string title = spec.title + ";" + spec.xTitle + ";Events";
+//         const std::string realName = "ml_real_" + spec.name;
+//         auto realHist = realPlot.Histo1D(
+//             {realName.c_str(), title.c_str(), spec.bins, spec.xMin, spec.xMax},
+//             spec.column);
+
+//         std::vector<ROOT::RDF::RResultPtr<TH1D>> mcHists;
+//         for (const auto& sample : samples) {
+//             auto sourceDf = mcPlot.Filter(
+//                 [sourceId = sample.id](UInt_t id) { return id == sourceId; },
+//                 {"FILE_CLASSIFICATOR"});
+//             const std::string mcName = "ml_mc_" + sample.name + "_" + spec.name;
+//             mcHists.push_back(sourceDf.Histo1D(
+//                 {mcName.c_str(), title.c_str(), spec.bins, spec.xMin, spec.xMax},
+//                 spec.column, "eventWeight"));
+//         }
+
+//         handles.emplace_back(realHist);
+//         for (auto& hist : mcHists) handles.emplace_back(hist);
+//         plots.push_back({spec, realHist, mcHists});
+//     }
+
+//     ROOT::RDF::RunGraphs(handles);
+//     gSystem->mkdir("Images", true);
+
+//     for (auto& plot : plots) {
+//         plot.realHist->Scale(testSplitCorrection);
+//         plot.realHist->SetStats(false);
+//         plot.realHist->SetMarkerStyle(20);
+//         plot.realHist->SetMarkerSize(0.8);
+//         plot.realHist->SetLineColor(kBlack);
+
+//         TCanvas canvas(("mlCanvas_" + plot.spec.name).c_str(), "MC and real data", 1200, 1000);
+//         TPad upperPad(("mlUpper_" + plot.spec.name).c_str(), "histograms", 0.0, 0.30, 1.0, 1.0);
+//         TPad ratioPad(("mlRatio_" + plot.spec.name).c_str(), "MC / data", 0.0, 0.0, 1.0, 0.30);
+
+//         upperPad.SetLeftMargin(0.14);
+//         upperPad.SetRightMargin(0.05);
+//         upperPad.SetTopMargin(0.08);
+//         upperPad.SetBottomMargin(0.02);
+//         ratioPad.SetLeftMargin(0.14);
+//         ratioPad.SetRightMargin(0.05);
+//         ratioPad.SetTopMargin(0.03);
+//         ratioPad.SetBottomMargin(0.35);
+//         upperPad.Draw();
+//         ratioPad.Draw();
+//         upperPad.cd();
+
+//         THStack mcStack(("mlStack_" + plot.spec.name).c_str(),
+//                         (plot.spec.title + ";" + plot.spec.xTitle + ";Events").c_str());
+//         TLegend legend(0.66, 0.58, 0.94, 0.91);
+//         legend.SetBorderSize(0);
+//         legend.SetFillStyle(0);
+
+//         TH1D totalMc(*plot.mcHists.front().GetPtr());
+//         totalMc.SetDirectory(nullptr);
+//         totalMc.Reset();
+
+//         for (size_t i = 0; i < plot.mcHists.size(); ++i) {
+//             TH1D* hist = plot.mcHists[i].GetPtr();
+//             hist->SetFillColor(samples[i].color);
+//             hist->SetLineColor(kBlack);
+//             hist->SetLineWidth(1);
+//             hist->SetStats(false);
+//             mcStack.Add(hist);
+//             totalMc.Add(hist);
+//             legend.AddEntry(hist, samples[i].name.c_str(), "f");
+//         }
+
+//         const double maxY = std::max(plot.realHist->GetMaximum(), totalMc.GetMaximum());
+//         mcStack.SetMinimum(0.0);
+//         mcStack.SetMaximum(maxY > 0.0 ? maxY * 1.35 : 1.0);
+//         mcStack.Draw("HIST");
+//         mcStack.GetXaxis()->SetLabelSize(0.0);
+//         mcStack.GetXaxis()->SetTitleSize(0.0);
+//         mcStack.GetYaxis()->SetTitle("Events");
+//         plot.realHist->Draw("E1 SAME");
+//         legend.AddEntry(plot.realHist.GetPtr(), "Real data", "lep");
+//         legend.Draw();
+
+//         ratioPad.cd();
+//         TH1D ratio(totalMc);
+//         ratio.SetDirectory(nullptr);
+//         ratio.SetName(("mlRatioHist_" + plot.spec.name).c_str());
+//         ratio.SetTitle("");
+//         ratio.SetStats(false);
+//         ratio.Divide(plot.realHist.GetPtr());
+//         ratio.SetMinimum(0.0);
+//         ratio.SetMaximum(2.0);
+//         ratio.SetLineColor(kBlack);
+//         ratio.SetLineWidth(2);
+//         ratio.GetYaxis()->SetTitle("MC / Data");
+//         ratio.GetYaxis()->SetNdivisions(505);
+//         ratio.GetYaxis()->SetTitleSize(0.10);
+//         ratio.GetYaxis()->SetTitleOffset(0.55);
+//         ratio.GetYaxis()->SetLabelSize(0.085);
+//         ratio.GetXaxis()->SetTitle(plot.spec.xTitle.c_str());
+//         ratio.GetXaxis()->SetTitleSize(0.12);
+//         ratio.GetXaxis()->SetTitleOffset(1.10);
+//         ratio.GetXaxis()->SetLabelSize(0.095);
+//         ratio.Draw("HIST");
+
+//         TLine unityLine(ratio.GetXaxis()->GetXmin(), 1.0,
+//                         ratio.GetXaxis()->GetXmax(), 1.0);
+//         unityLine.SetLineColor(kGray + 2);
+//         unityLine.SetLineStyle(2);
+//         unityLine.SetLineWidth(2);
+//         unityLine.Draw("SAME");
+
+//         canvas.Modified();
+//         canvas.Update();
+//         const std::string output = "Images/ML_comparison_" + plot.spec.name + ".png";
+//         canvas.SaveAs(output.c_str());
+//         logValue("ML MC/data comparison plot saved", output);
+//     }
+// }
 
 //PYTORCH INSTALATION
 // Check the environment
@@ -721,7 +911,7 @@ double calculateNormalization(const std::string& sampleName, const std::vector<s
 //REAL DATA LUMINOSITY NORMALIZATION FOR PROPER COMPARISON END
 
 //
-// docker desktop start
+// docker desktop start --detach
 // docker stats cmscloud
 //docker stop cmscloud OR //exit
 // docker start -ai cmscloud
@@ -740,7 +930,7 @@ void MlRun()
     resetLog();
     gSystem->mkdir("MlTemp", true);
 
-    const unsigned int numberOfThreads = 4;
+    const unsigned int numberOfThreads = 8;
     // ROOT::EnableImplicitMT(numberOfThreads); //The blocks are processed concurrently, and ROOT explicitly says there is no guarantee about processing order. It also specifically warns that under implicit MT, rdfentry_ does not correspond to the original TTree/TChain entry number, and operations such as Take() do not preserve original ordering. SO DONT USE PARALELISM!
 
     const bool DevelopmentMode = true;
@@ -748,9 +938,9 @@ void MlRun()
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 50.00;
+    const double DatasetUsagePercentage = 5.00;
     const double ValidationUsagePercentage = 20.00; // Percent of the selected training sample.
-    const double EvaluationUsagePercentage = 100.00;
+    const double EvaluationUsagePercentage = 10.00;
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -787,6 +977,8 @@ void MlRun()
     const size_t MaxMuons = 2;//The data is cutted up to N muons so only 2 first muons will be slit into columns .
     const std::vector<std::string> features = getBdtFeatureNames(MaxMuons);
 
+
+    
     //BDT PARAMETERS
     const unsigned int numberOfTrees = 6;
     const unsigned int maximumDepth = 50;//A depth-three tree can represent interactions among several variables.
@@ -828,18 +1020,51 @@ void MlRun()
     // nnHiddenLayers = {128, 64, 32}; nnBatchSize = 512; precision: 0.886347 logNN73.txt
     // reduce nnLearningRate = 0.0007; nnBatchSize = 1024; and increase training data tp 50 % and validation same 20% evaluation 100% epoch7 precision: 0.889155 logNN74.txt
     // INCREASING THE AMOUNT OF DATA UP TO 4 FILES THEN PRECISION RISES TO PRECISION: 0.925144! (previous training on 2 filespersample) 
+    // "MlTemp/DrellYan_NN_0889.pt" best model with  nnHiddenLayers = {128, 64, 32};, nnBatchSize = 1024;, nnNumberOfEpochs = 7;, nnWeightDecay = 0.0001;, Optimizer - Adam, Learning rate - 0.0007, Loss - Binary cross-entropy with logits
+    // 26 inputs
+    //   → Linear(128) → ReLU → Dropout(p=0.00)
+    //   → Linear(64)  → ReLU → Dropout(p=0.00)
+    //   → Linear(32)  → ReLU → Dropout(p=0.00)
+    //   → Linear(1)   → logit
+    //   → sigmoid      → DY probability
+
+
+    // EXPERIMENTS WITH ARCHITECTURE
+    // (const double DatasetUsagePercentage = 5.00; const double ValidationUsagePercentage = 20.00; const double EvaluationUsagePercentage = 10.00;)
+    // logNN76 nnHiddenLayers = {64}, nnNumberOfEpochs = 10; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam
+    // logNN77 nnHiddenLayers = {256}, nnNumberOfEpochs = 500; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.907247
+    // logNN78 nnHiddenLayers = {64, 32}, nnNumberOfEpochs = 100; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.917973
+    // logNN79 nnHiddenLayers = {256, 128}, nnNumberOfEpochs = 50; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision  0.917089
+    // logNN80 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 50; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.92133
+    // logNN81 nnHiddenLayers = {128, 128, 64}, nnNumberOfEpochs = 50; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision  0.923542
+    // logNN82 nnHiddenLayers = {128, 128, 64, 32}, nnNumberOfEpochs = 50; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.907902 (long stoped)
+    // logNN83 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.923542
+    // logNN84
+    // logNN85
+    // logNN86
+    // logNN87
+    // logNN88
+    // logNN89
+    // logNN90
+
 
     //NN PARAMETERS
-    const bool UseNeuralNetwork = true; //false runs the existing BDT workflow.
     const std::vector<int64_t> nnHiddenLayers = {128, 64, 32};
-    const unsigned int nnNumberOfEpochs = 7;
+    const unsigned int nnNumberOfEpochs = 50;
     const int64_t nnBatchSize = 1024;
     const double nnLearningRate = 0.0007;
     const double nnWeightDecay = 0.0001;
     const double nnDropoutProbability = 0.00;
     const unsigned int nnRandomSeed = 1;
     const double nnDecisionThreshold = 0.5;
-    const std::string nnModelFile = "MlTemp/DrellYan_NN_0889.pt";
+    const std::string nnModelFile = "MlTemp/DrellYan_NN.pt";
+    double TrainMaxPrecision = 0.905;
+
+    const bool UseNeuralNetwork = true;
+    const bool UseBDT = false;
+    // if (!UseNeuralNetwork && !UseBDT)
+    //     throw std::runtime_error("Enable UseNeuralNetwork, UseBDT, or both");
+
 
     if (UseNeuralNetwork) {
         logLine("[NN model parameters]");
@@ -862,89 +1087,129 @@ void MlRun()
         logValue("Shrinkage", shrinkage); logValue("Random seed", randomSeed); logValue("Decision threshold", decisionThreshold);
     }
 
-    const bool PrepareLocalData = false; // First run: true. Later runs: false.
-    const std::string localDir = "MlTemp/NNData";
-
-    auto percentName = [](double percent) {
-        std::ostringstream s; s << percent;
-        std::string name = s.str();
-        std::replace(name.begin(), name.end(), '.', 'p');
-        return name + "pct";
+    
+    const bool PrepareLocalData = false; // Set true once to rebuild the local MC files.
+    const std::string localDir = "MlTemp/PreparedDY";
+    auto percentTag = [](double value) {
+        std::ostringstream text;
+        text << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
+        std::string tag = text.str();
+        std::replace(tag.begin(), tag.end(), '.', 'p');
+        return tag;
     };
+    const std::string settings =
+        std::to_string(DevelopmentFilesPerSample) + "files_D" +
+        percentTag(DatasetUsagePercentage) + "pct_V" +
+        percentTag(ValidationUsagePercentage) + "pct_E" +
+        percentTag(EvaluationUsagePercentage) + "pct";
 
-    const std::string trainFile = localDir + "/DY_train_" + percentName(DatasetUsagePercentage) + ".root";
-    const std::string validationFile = localDir + "/DY_validation_" + percentName(ValidationUsagePercentage) + ".root";
-    const std::string evaluationFile = localDir + "/DY_evaluation_" + percentName(EvaluationUsagePercentage) + ".root";
+    const std::string trainFile = localDir + "/DY_train_" + settings + ".root";
+    const std::string validationFile = localDir + "/DY_validation_" + settings + ".root";
+    const std::string evaluationFile = localDir + "/DY_test_" + settings + ".root";
+    const std::vector<double> crossSectionsPb = {
+        5396.0, 687.1, 32.45, 32.51, 75.88, 27.56, 12.08, 54110.0, 2.529e6
+    }; // DY, ttbar, top-tW, antitop-tW, WW, WZ, ZZ, W+jets, QCD.
 
-    logLine("------");
-    if (UseNeuralNetwork && !PrepareLocalData) {
-        logLine("--- TRAINING AND EVALUATION USING SAVED DATA ---");
-        for (const auto& file : {trainFile, validationFile, evaluationFile})
-            if (gSystem->AccessPathName(file.c_str()))
-                throw std::runtime_error("Local NN dataset missing: " + file);
+    const bool CreateMcRealDataFractionPlots = false;
 
+    if (!PrepareLocalData) {
         ROOT::DisableImplicitMT();
+
+        std::vector<double> sumGenWeights(crossSectionsPb.size());
+        const std::vector<std::string> savedFiles = {trainFile, validationFile, evaluationFile};
+
+        for (size_t fileIndex = 0; fileIndex < savedFiles.size(); ++fileIndex) {
+            std::unique_ptr<TFile> metadata(TFile::Open(savedFiles[fileIndex].c_str(), "READ"));
+            if (!metadata || metadata->IsZombie())
+                throw std::runtime_error("Missing local MC file: " + savedFiles[fileIndex] +
+                                         "; run with PrepareLocalData = true");
+
+            auto readInt = [&](const std::string& key) {
+                auto* value = dynamic_cast<TParameter<int>*>(metadata->Get(key.c_str()));
+                if (!value) throw std::runtime_error("Missing " + key + " in " + savedFiles[fileIndex]);
+                return value->GetVal();
+            };
+            auto readDouble = [&](const std::string& key) {
+                auto* value = dynamic_cast<TParameter<double>*>(metadata->Get(key.c_str()));
+                if (!value) throw std::runtime_error("Missing " + key + " in " + savedFiles[fileIndex]);
+                return value->GetVal();
+            };
+            auto checkDouble = [&](const std::string& key, double expected) {
+                if (std::abs(readDouble(key) - expected) > 1e-9)
+                    throw std::runtime_error("Prepared data setting changed: " + key +
+                                             "; run with PrepareLocalData = true");
+            };
+
+            if (readInt("PreparedSchemaVersion") != 1 ||
+                readInt("DevelopmentMode") != static_cast<int>(DevelopmentMode) ||
+                readInt("DevelopmentFilesPerSample") != static_cast<int>(DevelopmentFilesPerSample) ||
+                readInt("MaxMuons") != static_cast<int>(MaxMuons) ||
+                readInt("SplitSeed") != static_cast<int>(randomSeed))
+                throw std::runtime_error("Prepared data settings changed; run with PrepareLocalData = true");
+
+            checkDouble("TrainingFraction", trainingFraction);
+            checkDouble("DatasetUsagePercentage", DatasetUsagePercentage);
+            checkDouble("ValidationUsagePercentage", ValidationUsagePercentage);
+            checkDouble("EvaluationUsagePercentage", EvaluationUsagePercentage);
+
+            for (size_t i = 0; i < sumGenWeights.size(); ++i) {
+                const double value = readDouble("McSumGenWeight_" + std::to_string(i));
+                if (!std::isfinite(value) || value == 0.0)
+                    throw std::runtime_error("Invalid saved MC generator-weight sum");
+                if (fileIndex != 0 && value != sumGenWeights[i])
+                    throw std::runtime_error("Local MC files have inconsistent metadata");
+                sumGenWeights[i] = value;
+            }
+        }
+
         ROOT::RDataFrame train("Events", trainFile);
         ROOT::RDataFrame validation("Events", validationFile);
         ROOT::RDataFrame evaluation("Events", evaluationFile);
+        for (const char* column : {"Index", "IsDyProcess", "FILE_CLASSIFICATOR",
+                                   "HLT_IsoMu24", "genWeight", "Muon_pt", "Muon_eta", "Muon_phi"})
+            if (!train.HasColumn(column) || !validation.HasColumn(column) ||
+                !evaluation.HasColumn(column))
+                throw std::runtime_error(std::string("Prepared MC files lack ") + column);
 
-        for (const char* column :
-             {"FILE_CLASSIFICATOR", "HLT_IsoMu24", "genWeight"}) {
-            if (!evaluation.HasColumn(column))
-                throw std::runtime_error(
-                    std::string("Saved MC evaluation file lacks ") + column +
-                    "; regenerate it with PrepareLocalData = true");
+        std::string nnModel, bdtModel;
+        if (UseNeuralNetwork) {
+            nnModel = trainDrellYanNn(
+                features, train, validation, nnModelFile, nnHiddenLayers,
+                nnNumberOfEpochs, nnBatchSize, nnLearningRate, nnWeightDecay,
+                nnDropoutProbability, nnRandomSeed, 100.0, numberOfThreads,
+                nnDecisionThreshold, TrainMaxPrecision);
+            logValue("Trained NN model", nnModel);
+        }
+        if (UseBDT) {
+            bdtModel = trainDrellYanBdt(
+                features, train, validation,
+                "MlTemp/TMVA_DY_training.root", "MlTemp/BDT_training_history.root",
+                "DrellYanClassification.weights.xml", "BDTG", "DY_BDT_dataset",
+                numberOfTrees, maximumDepth, minimumNodeSizePercent,
+                baggedSampleFraction, numberOfCuts, shrinkage, randomSeed,
+                100.0, numberOfThreads);
+            logValue("Trained BDT model", bdtModel);
         }
 
-        // const std::string weights = trainDrellYanNn(
-        //     features, train,
-        //     validation,
-        //     nnModelFile,
-        //     nnHiddenLayers,
-        //     nnNumberOfEpochs,
-        //     nnBatchSize,
-        //     nnLearningRate,
-        //     nnWeightDecay,
-        //     nnDropoutProbability,
-        //     nnRandomSeed,
-        //     100.0,//100%usage of reading file
-        //     numberOfThreads,
-        //     nnDecisionThreshold);
 
-        //Real data loading from Online for NN evaluation
-                // The saved-data NN branch returns before the BDT real-data setup below.
-        const auto nnRealFiles = loadFileList(
+        // Shared remote real-data loading and feature preparation for both models.
+        const auto realFiles = loadFileList(
             RealDataFilesPath, DevelopmentMode, DevelopmentRealDataFiles);
-        const double nnLuminosityFb = calculateIntegratedLuminosityFb(
-            nnRealFiles, JsonLuminosityPath, LuminosityCsvPath);
+        const double luminosityFb = calculateIntegratedLuminosityFb(
+            realFiles, JsonLuminosityPath, LuminosityCsvPath);
 
-        std::vector<std::vector<std::string>> nnMcFilesBySource{
-            loadFileList(DyMainFilesPath, DevelopmentMode, DevelopmentFilesPerSample)
-        };
-        for (const auto& path : BackgroundFilesPaths)
-            nnMcFilesBySource.push_back(
-                loadFileList(path, DevelopmentMode, DevelopmentFilesPerSample));
+        std::vector<double> mcScales;
+        mcScales.reserve(crossSectionsPb.size());
+        for (size_t i = 0; i < crossSectionsPb.size(); ++i)
+            mcScales.push_back(crossSectionsPb[i] * luminosityFb * 1000.0 /
+                               sumGenWeights[i]);
 
-        const std::vector<double> nnCrossSectionsPb = {
-            5396.0, 687.1, 32.45, 32.51, 75.88, 27.56, 12.08, 54110.0, 2.529e6
-        };
-        if (nnCrossSectionsPb.size() != nnMcFilesBySource.size())
-            throw std::runtime_error("NN MC cross sections do not match the source list");
-
-        std::vector<double> nnMcScales;
-        nnMcScales.reserve(nnMcFilesBySource.size());
-        for (size_t i = 0; i < nnMcFilesBySource.size(); ++i) {
-            const std::string name = i == 0 ? "main_dy" : BackgroundFilesPaths[i - 1];
-            nnMcScales.push_back(calculateNormalization(
-                name, nnMcFilesBySource[i], nnCrossSectionsPb[i], nnLuminosityFb));
-        }
-
-        ROOT::RDataFrame nnRealData("Events", nnRealFiles);
-        auto nnRealWithIndex = nnRealData
+        ROOT::RDataFrame realData("Events", realFiles);
+        auto realWithIndex = realData
             .DefinePerSample("SourceFileId",
-                [nnRealFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
-                    for (UInt_t i = 0; i < nnRealFiles.size(); ++i)
-                        if (info.Contains(nnRealFiles[i])) return i;
+                [realFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
+                    for (UInt_t i = 0; i < realFiles.size(); ++i)
+                        if (info.Contains(realFiles[i])) return i;
                     throw std::runtime_error("Cannot determine real-data source file");
                 })
             .Define("Index",
@@ -952,42 +1217,75 @@ void MlRun()
                     return makeEventIndex(fileId, run, lumi, event);
                 }, {"SourceFileId", "run", "luminosityBlock", "event"});
 
-        auto nnRealForTesting = nnRealWithIndex.Filter(
+        auto realForTesting = realWithIndex.Filter(
             [trainingFraction](ULong64_t index) {
                 return !(static_cast<double>(index % 100) / 100.0 < trainingFraction);
             }, {"Index"});
+        auto filteredReal = HLT_IsoMu24_pT_n_filter(
+            filterLuminosity(realForTesting, JsonLuminosityPath));
+        auto realFeatures = NormalizeToBdtDataFrame(filteredReal, MaxMuons);
+        if (realFeatures.features != features)
+            throw std::runtime_error("Real-data and MC feature lists differ");
 
-        auto nnFilteredReal = HLT_IsoMu24_pT_n_filter(
-            filterLuminosity(nnRealForTesting, JsonLuminosityPath));
-        auto nnRealFeatures = NormalizeToBdtDataFrame(nnFilteredReal, MaxMuons);
-        if (nnRealFeatures.features != features)
-            throw std::runtime_error("Real-data and NN feature lists differ");
 
-        // The saved MC evaluation file already has this evaluation fraction applied.
-        // Apply the same fraction and seed to real data.
-        const ULong64_t nnRealKeep = static_cast<ULong64_t>(
-            std::llround(EvaluationUsagePercentage * 100.0));
-        auto nnRealEvaluation = nnRealFeatures.df.Filter(
-            [nnRealKeep, nnRandomSeed](ULong64_t index) {
-                return mix64(index ^ static_cast<ULong64_t>(nnRandomSeed) ^
-                             0xd1b54a32d192ed03ULL) % 10000ULL < nnRealKeep;
-            }, {"Index"});
+        // if (CreateMcRealDataFractionPlots) { //here this place is incorect sine we do not apply full filter.
+        //     createMlMcRealDataFractionPlots(evaluation, realFeatures.df, mcScales, trainingFraction);
+        // }  
 
-        evaluateDrellYanNn(
-            features,
-            evaluation,
-            nnRealEvaluation,
-            // weights,
-            "MlTemp/DrellYan_NN_0889.pt",
-            nnDecisionThreshold,
-            100.0, // Saved MC evaluation file was already sampled.
-            HistogramUsagePercentage,
-            FalseHistogramUsagePercentage,
-            nnRandomSeed,
-            nnBatchSize,
-            numberOfThreads,
-            BackgroundFilesPaths,
-            nnMcScales);
+        PredictionResult nnPrediction, bdtPrediction;
+        if (UseNeuralNetwork) {
+            nnPrediction = evaluateDrellYanNn(
+                features,
+                evaluation,
+                realFeatures.df,
+                nnModel,
+                // "MlTemp/DrellYan_NN_0889.pt",
+                nnDecisionThreshold,
+                EvaluationUsagePercentage,
+                HistogramUsagePercentage,
+                FalseHistogramUsagePercentage,
+                randomSeed,
+                nnBatchSize,
+                numberOfThreads,
+                BackgroundFilesPaths,
+                mcScales);
+        }
+        if (UseBDT) {
+            bdtPrediction = evaluateDrellYanBdt(
+                features,
+                evaluation,
+                realFeatures.df,
+                bdtModel,
+                // "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
+                "BDTG",
+                decisionThreshold,
+                EvaluationUsagePercentage,
+                HistogramUsagePercentage,
+                FalseHistogramUsagePercentage,
+                randomSeed,
+                BackgroundFilesPaths,
+                mcScales);
+        }
+
+        if (UseNeuralNetwork && UseBDT) {
+            const ULong64_t histogramKeep =
+                static_cast<ULong64_t>(std::llround(HistogramUsagePercentage * 100.0));
+            const ULong64_t evaluationKeep =
+                static_cast<ULong64_t>(std::llround(EvaluationUsagePercentage * 100.0));
+
+            auto commonHistogramDf = evaluation
+                .Filter([evaluationKeep, randomSeed](ULong64_t index) {
+                    return mix64(index ^ static_cast<ULong64_t>(randomSeed) ^
+                                0xd1b54a32d192ed03ULL) % 10000ULL < evaluationKeep;
+                }, {"Index"})
+                .Filter([histogramKeep, randomSeed](ULong64_t index) {
+                    return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeep;
+                }, {"Index"});
+
+            ModelsEvaluation(commonHistogramDf, nnPrediction, bdtPrediction,
+                            nnModel, bdtModel, BackgroundFilesPaths);
+        }
+
         logElapsedTime("MlRun complete");
         return;
     }
@@ -1090,36 +1388,31 @@ void MlRun()
         }, {"Index"});
 
 
-    std::vector<std::string> cachedColumns = features;
+    // std::vector<std::string> cachedColumns = features;
 
-    cachedColumns.emplace_back("Index");
-    cachedColumns.emplace_back("IsDyProcess");
-    cachedColumns.emplace_back("IsTraining");
+    // cachedColumns.emplace_back("Index");
+    // cachedColumns.emplace_back("IsDyProcess");
+    // cachedColumns.emplace_back("IsTraining");
 
-    auto cachedBdtData = dfWithSplit.Cache(cachedColumns);
+    // auto cachedBdtData = dfWithSplit.Cache(cachedColumns);
 
-    ROOT::RDF::RNode trainingNode = dfWithSplit.Filter("IsTraining"); //trainingNode contains 30% of all events from all loaded files
-    ROOT::RDF::RNode testingNode  = dfWithSplit.Filter("!IsTraining"); //testingNode contains 70% of all events from all loaded files
-    
-    if (UseNeuralNetwork && PrepareLocalData) {
+    ROOT::RDF::RNode trainingNode = dfWithSplit.Filter("IsTraining");  // 70%
+    ROOT::RDF::RNode testingNode = dfWithSplit.Filter("!IsTraining");  // 30%
+
+    if (PrepareLocalData) {
         if (ValidationUsagePercentage <= 0.0 || ValidationUsagePercentage >= 100.0)
             throw std::runtime_error("Validation percentage must be between 0 and 100");
 
         gSystem->mkdir(localDir.c_str(), true);
         const auto trainKeep = static_cast<ULong64_t>(std::llround(DatasetUsagePercentage * 100.0));
         const auto validationKeep = static_cast<ULong64_t>(std::llround(ValidationUsagePercentage * 100.0));
-        const auto evalKeep = static_cast<ULong64_t>(std::llround(EvaluationUsagePercentage * 100.0));
 
-        const auto selectTrain = [trainKeep, nnRandomSeed](ULong64_t index) {
-            return (index * 7919ULL + nnRandomSeed) % 10000ULL < trainKeep;
+        const auto selectTrain = [trainKeep, randomSeed](ULong64_t index) {
+            return (index * 7919ULL + randomSeed) % 10000ULL < trainKeep;
         };
-        const auto selectValidation = [validationKeep, nnRandomSeed](ULong64_t index) {
-            return mix64(index ^ static_cast<ULong64_t>(nnRandomSeed) ^
-                        0x243f6a8885a308d3ULL) % 10000ULL < validationKeep;
-        };
-        const auto selectEvaluation = [evalKeep, nnRandomSeed](ULong64_t index) {
-            return mix64(index ^ static_cast<ULong64_t>(nnRandomSeed) ^
-                        0xd1b54a32d192ed03ULL) % 10000ULL < evalKeep;
+        const auto selectValidation = [validationKeep, randomSeed](ULong64_t index) {
+            return mix64(index ^ static_cast<ULong64_t>(randomSeed) ^
+                         0x243f6a8885a308d3ULL) % 10000ULL < validationKeep;
         };
 
         std::vector<std::string> columns = features;
@@ -1143,100 +1436,48 @@ void MlRun()
             .Snapshot("Events", trainFile, columns, options);
         auto savedValidation = selectedTraining.Filter(selectValidation, {"Index"})
             .Snapshot("Events", validationFile, columns, options);
-        auto savedEvaluation = testingNode.Filter(selectEvaluation, {"Index"})
-            .Snapshot("Events", evaluationFile, columns, options);
+        auto savedEvaluation = testingNode.Snapshot("Events", evaluationFile, columns, options);
 
         ROOT::RDF::RunGraphs(std::vector<ROOT::RDF::RResultHandle>{
             savedTrain, savedValidation, savedEvaluation
         });
+        if (mcFilesBySource.size() != crossSectionsPb.size())
+            throw std::runtime_error("MC source and cross-section counts differ");
+
+        std::vector<double> sumGenWeights;
+        sumGenWeights.reserve(mcFilesBySource.size());
+        for (const auto& sourceFiles : mcFilesBySource) {
+            ROOT::RDataFrame runs("Runs", sourceFiles);
+            const double sum = *runs.Sum<double>("genEventSumw");
+            if (!std::isfinite(sum) || sum == 0.0)
+                throw std::runtime_error("Invalid MC generator-weight sum");
+            sumGenWeights.push_back(sum);
+        }
+
+        for (const auto& path : {trainFile, validationFile, evaluationFile}) {
+            std::unique_ptr<TFile> metadata(TFile::Open(path.c_str(), "UPDATE"));
+            if (!metadata || metadata->IsZombie())
+                throw std::runtime_error("Cannot write prepared-data metadata: " + path);
+
+            metadata->cd();
+            TParameter<int>("PreparedSchemaVersion", 1).Write();
+            TParameter<int>("DevelopmentMode", static_cast<int>(DevelopmentMode)).Write();
+            TParameter<int>("DevelopmentFilesPerSample",
+                            static_cast<int>(DevelopmentFilesPerSample)).Write();
+            TParameter<int>("MaxMuons", static_cast<int>(MaxMuons)).Write();
+            TParameter<int>("SplitSeed", static_cast<int>(randomSeed)).Write();
+            TParameter<double>("TrainingFraction", trainingFraction).Write();
+            TParameter<double>("DatasetUsagePercentage", DatasetUsagePercentage).Write();
+            TParameter<double>("ValidationUsagePercentage", ValidationUsagePercentage).Write();
+            TParameter<double>("EvaluationUsagePercentage", EvaluationUsagePercentage).Write();
+            for (size_t i = 0; i < sumGenWeights.size(); ++i) {
+                const std::string key = "McSumGenWeight_" + std::to_string(i);
+                TParameter<double>(key.c_str(), sumGenWeights[i]).Write();
+            }
+        }
         logElapsedTime("Local NN datasets saved");
         return;
     }
-
-    std::cout << "cachedBdtData completed\n";
-
-    logElapsedTime("Training/testing dataframes created");
-
-    logLine("--- REAL DATA LOADING ---");
-    const auto realDataFiles = loadFileList(RealDataFilesPath, DevelopmentMode, DevelopmentRealDataFiles);
-    // Calculate luminosity from all certified blocks in the loaded real-data files.
-    const double integratedLuminosityFb = calculateIntegratedLuminosityFb(realDataFiles, JsonLuminosityPath, LuminosityCsvPath);
-    // Same cross sections and source order as comparisonAnalysis().
-    const std::vector<double> crossSectionsPb = {5396.0, 687.1, 32.45, 32.51, 75.88, 27.56, 12.08, 54110.0, 2.529e6}; // DY, ttbar, top-tW, antitop-tW, WW, WZ, ZZ, W+jets, QCD.
-
-    if (crossSectionsPb.size() != mcFilesBySource.size())
-        throw std::runtime_error("MC cross sections do not match the source list");
-
-    std::vector<double> mcScales;
-    for (size_t i = 0; i < mcFilesBySource.size(); ++i) {
-        const std::string name = i == 0 ? "main_dy" : BackgroundFilesPaths[i - 1];
-        mcScales.push_back(calculateNormalization(name, mcFilesBySource[i], crossSectionsPb[i], integratedLuminosityFb));}
-
-    // Append Indexes to the realdata dataframe
-    ROOT::RDataFrame realDataDf("Events", realDataFiles);
-    auto realDataWithIndex = realDataDf
-        .DefinePerSample("SourceFileId", [realDataFiles](unsigned int, const ROOT::RDF::RSampleInfo& info) -> UInt_t {
-            for (UInt_t i = 0; i < realDataFiles.size(); ++i)
-                if (info.Contains(realDataFiles[i])) return i;
-            throw std::runtime_error("Cannot determine real-data source file");
-        })
-        .Define("Index", [](UInt_t fileId, UInt_t run, UInt_t lumi, ULong64_t event) {
-            return makeEventIndex(fileId, run, lumi, event);
-        }, {"SourceFileId", "run", "luminosityBlock", "event"});
-
-    auto realDataForTesting = realDataWithIndex.Filter(
-        [trainingFraction](ULong64_t index) {
-            return !(static_cast<double>(index % 100) / 100.0 < trainingFraction);
-        }, {"Index"});
-
-    auto filteredRealData = HLT_IsoMu24_pT_n_filter(filterLuminosity(realDataForTesting, JsonLuminosityPath));
-    auto realBdtData = NormalizeToBdtDataFrame(filteredRealData, MaxMuons);
-
-    if (realBdtData.features != features)
-        throw std::runtime_error("Real-data and MC BDT feature lists differ");
-
-
-    // Main and BG events will all the amount of muons pass in the training.
-    const std::string weightsFile = trainDrellYanBdt(
-        features,
-        trainingNode,
-        testingNode,
-        "MlTemp/TMVA_DY_training.root",
-        "MlTemp/BDT_training_history.root",
-        "DrellYanClassification.weights.xml",
-        "BDTG",
-        "DY_BDT_dataset",
-        numberOfTrees,
-        maximumDepth,
-        minimumNodeSizePercent,
-        baggedSampleFraction,
-        numberOfCuts,
-        shrinkage,
-        randomSeed,
-        DatasetUsagePercentage,
-        numberOfThreads
-    );
-    logValue("Trained model", weightsFile); logElapsedTime("BDT training END");
-
-
-    // EVALUATION
-    evaluateDrellYanBdt(
-        features,
-        testingNode,
-        realBdtData.df,
-        // weightsFile,
-        "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
-        "BDTG",
-        decisionThreshold,
-        EvaluationUsagePercentage,
-        HistogramUsagePercentage,
-        FalseHistogramUsagePercentage,
-        randomSeed,
-        BackgroundFilesPaths,
-        mcScales
-    );
-    logElapsedTime("BDT evaluation END");
-
 
     logElapsedTime("MlRun complete");
 }

@@ -1,0 +1,219 @@
+Drell-Yan log
+
+[NN model parameters]
+Method: LibTorch dense neural network
+Device: CPU
+Optimizer: Adam
+Loss: BCEWithLogitsLoss
+Activation: ReLU
+Input normalization: Training mean and standard deviation
+Hidden layers: 4
+Hidden layer 1 neurons: 128
+Hidden layer 2 neurons: 128
+Hidden layer 3 neurons: 64
+Hidden layer 4 neurons: 32
+Epochs: 50
+Batch size: 1024
+Learning rate: 0.0007
+Weight decay: 0.0001
+Dropout probability: 0
+Random seed: 1
+Decision threshold: 0.5
+Model file: MlTemp/DrellYan_NN.pt
+Evaluation usage [%]: 10
+
+--- NN TRAINING FEATURES ---
+Number of features: 26
+Feature 1: MuonCount
+Feature 2: HLT_IsoMu24_f
+Feature 3: MET_pt
+Feature 4: HasMuonTrigger
+Feature 5: MinMuonTriggerDeltaR2
+Feature 6: MaxMuonTriggerPt
+Feature 7: Muon0_exists
+Feature 8: Muon0_pt
+Feature 9: Muon0_eta
+Feature 10: Muon0_charge
+Feature 11: Muon0_isGlobal
+Feature 12: Muon0_nStations
+Feature 13: Muon0_nTrackerLayers
+Feature 14: Muon0_dxy
+Feature 15: Muon0_ptErr
+Feature 16: Muon0_tkRelIso
+Feature 17: Muon1_exists
+Feature 18: Muon1_pt
+Feature 19: Muon1_eta
+Feature 20: Muon1_charge
+Feature 21: Muon1_isGlobal
+Feature 22: Muon1_nStations
+Feature 23: Muon1_nTrackerLayers
+Feature 24: Muon1_dxy
+Feature 25: Muon1_ptErr
+Feature 26: Muon1_tkRelIso
+
+--- NN TRAINING DATA ---
+NN data loading START elapsed time: 1.46847 s
+NN training input events: 577694
+NN training valid events: 577694
+NN training skipped non-finite events: 0
+NN training signal: 28858
+NN training background: 548836
+NN testing input events: 145061
+NN testing valid events: 145061
+NN testing skipped non-finite events: 0
+NN testing signal: 7212
+NN testing background: 137849
+NN data loading END elapsed time: 5.78023 s
+NN training baseline accuracy (always background): 0.950046
+NN testing baseline accuracy (always background): 0.950283
+
+--- NN TRAINING HISTORY ---
+NN Training START elapsed time: 6.00559 s
+NN epoch: 1
+NN mean training batch loss: 0.0631503
+NN testing loss: 0.0298192
+NN testing precision: 0.858258
+NN epoch: 2
+NN mean training batch loss: 0.0289503
+NN testing loss: 0.0281907
+NN testing precision: 0.851981
+NN epoch: 3
+NN mean training batch loss: 0.0270915
+NN testing loss: 0.0263035
+NN testing precision: 0.877405
+NN epoch: 4
+NN mean training batch loss: 0.0260525
+NN testing loss: 0.0252828
+NN testing precision: 0.871758
+NN epoch: 5
+NN mean training batch loss: 0.0252751
+NN testing loss: 0.025503
+NN testing precision: 0.892764
+NN epoch: 6
+NN mean training batch loss: 0.0249562
+NN testing loss: 0.0250732
+NN testing precision: 0.864546
+NN epoch: 7
+NN mean training batch loss: 0.0244282
+NN testing loss: 0.0263203
+NN testing precision: 0.851678
+NN epoch: 8
+NN mean training batch loss: 0.0242423
+NN testing loss: 0.0239868
+NN testing precision: 0.901807
+NN epoch: 9
+NN mean training batch loss: 0.0238552
+NN testing loss: 0.0238668
+NN testing precision: 0.874434
+NN epoch: 10
+NN mean training batch loss: 0.0236583
+NN testing loss: 0.0235032
+NN testing precision: 0.894666
+NN epoch: 11
+NN mean training batch loss: 0.0234825
+NN testing loss: 0.0240741
+NN testing precision: 0.880536
+NN epoch: 12
+NN mean training batch loss: 0.0233866
+NN testing loss: 0.0241983
+NN testing precision: 0.865438
+NN epoch: 13
+NN mean training batch loss: 0.023269
+NN testing loss: 0.0231741
+NN testing precision: 0.896878
+NN epoch: 14
+NN mean training batch loss: 0.0229857
+NN testing loss: 0.0232221
+NN testing precision: 0.894348
+NN epoch: 15
+NN mean training batch loss: 0.0229715
+NN testing loss: 0.0233267
+NN testing precision: 0.907902
+NN epoch: 16
+NN mean training batch loss: 0.0228438
+NN testing loss: 0.0232188
+NN testing precision: 0.881992
+NN epoch: 17
+NN mean training batch loss: 0.022686
+NN testing loss: 0.0229736
+NN testing precision: 0.89103
+NN epoch: 18
+NN mean training batch loss: 0.0224493
+NN testing loss: 0.0226296
+NN testing precision: 0.894203
+NN epoch: 19
+NN mean training batch loss: 0.0223735
+NN testing loss: 0.0236995
+NN testing precision: 0.869532
+NN epoch: 20
+NN mean training batch loss: 0.022251
+NN testing loss: 0.0223303
+NN testing precision: 0.902873
+NN epoch: 21
+NN mean training batch loss: 0.0221724
+NN testing loss: 0.0223405
+NN testing precision: 0.891206
+NN epoch: 22
+NN mean training batch loss: 0.022038
+NN testing loss: 0.022201
+NN testing precision: 0.89245
+NN epoch: 23
+NN mean training batch loss: 0.0220002
+NN testing loss: 0.0224265
+NN testing precision: 0.905318
+NN epoch: 24
+NN mean training batch loss: 0.0217691
+NN testing loss: 0.0220287
+NN testing precision: 0.905418
+NN epoch: 25
+NN mean training batch loss: 0.021835
+NN testing loss: 0.0224735
+NN testing precision: 0.886906
+NN epoch: 26
+NN mean training batch loss: 0.0217363
+NN testing loss: 0.0220784
+NN testing precision: 0.894912
+NN epoch: 27
+NN mean training batch loss: 0.0216561
+NN testing loss: 0.0220406
+NN testing precision: 0.892228
+NN epoch: 28
+NN mean training batch loss: 0.0216751
+NN testing loss: 0.0218311
+NN testing precision: 0.899866
+NN epoch: 29
+NN mean training batch loss: 0.0215461
+NN testing loss: 0.0225081
+NN testing precision: 0.879815
+NN epoch: 30
+NN mean training batch loss: 0.0215522
+NN testing loss: 0.0222729
+NN testing precision: 0.895005
+NN epoch: 31
+NN mean training batch loss: 0.0216214
+NN testing loss: 0.0219228
+NN testing precision: 0.906092
+NN epoch: 32
+NN mean training batch loss: 0.021557
+NN testing loss: 0.0216759
+NN testing precision: 0.896598
+NN epoch: 33
+NN mean training batch loss: 0.0215114
+NN testing loss: 0.0217615
+NN testing precision: 0.905267
+NN epoch: 34
+NN mean training batch loss: 0.0213787
+NN testing loss: 0.0219519
+NN testing precision: 0.887539
+NN epoch: 35
+NN mean training batch loss: 0.0215292
+NN testing loss: 0.0234141
+NN testing precision: 0.871795
+NN epoch: 36
+NN mean training batch loss: 0.0213876
+NN testing loss: 0.0218687
+NN testing precision: 0.904833
+NN epoch: 37
+NN mean training batch loss: 0.0213339
+NN testing loss: 0.0240074
+NN testing precision: 0.892249

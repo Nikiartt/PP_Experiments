@@ -1,0 +1,144 @@
+Drell-Yan log
+
+[NN model parameters]
+Method: LibTorch dense neural network
+Device: CPU
+Optimizer: Adam
+Loss: BCEWithLogitsLoss
+Activation: ReLU
+Input normalization: Training mean and standard deviation
+Hidden layers: 3
+Hidden layer 1 neurons: 128
+Hidden layer 2 neurons: 64
+Hidden layer 3 neurons: 32
+Epochs: 7
+Batch size: 1024
+Learning rate: 0.0007
+Weight decay: 0.0001
+Dropout probability: 0
+Random seed: 1
+Decision threshold: 0.5
+Model file: MlTemp/DrellYan_NN_0889.pt
+Evaluation usage [%]: 100
+
+--- NN TRAINING FEATURES ---
+Number of features: 26
+Feature 1: MuonCount
+Feature 2: HLT_IsoMu24_f
+Feature 3: MET_pt
+Feature 4: HasMuonTrigger
+Feature 5: MinMuonTriggerDeltaR2
+Feature 6: MaxMuonTriggerPt
+Feature 7: Muon0_exists
+Feature 8: Muon0_pt
+Feature 9: Muon0_eta
+Feature 10: Muon0_charge
+Feature 11: Muon0_isGlobal
+Feature 12: Muon0_nStations
+Feature 13: Muon0_nTrackerLayers
+Feature 14: Muon0_dxy
+Feature 15: Muon0_ptErr
+Feature 16: Muon0_tkRelIso
+Feature 17: Muon1_exists
+Feature 18: Muon1_pt
+Feature 19: Muon1_eta
+Feature 20: Muon1_charge
+Feature 21: Muon1_isGlobal
+Feature 22: Muon1_nStations
+Feature 23: Muon1_nTrackerLayers
+Feature 24: Muon1_dxy
+Feature 25: Muon1_ptErr
+Feature 26: Muon1_tkRelIso
+
+--- NN TRAINING DATA ---
+NN data loading START elapsed time: 1.57305 s
+NN training input events: 5773613
+NN training valid events: 5773613
+NN training skipped non-finite events: 0
+NN training signal: 288391
+NN training background: 5485222
+NN testing input events: 1445127
+NN testing valid events: 1445127
+NN testing skipped non-finite events: 0
+NN testing signal: 71604
+NN testing background: 1373523
+NN data loading END elapsed time: 42.3969 s
+NN training baseline accuracy (always background): 0.95005
+NN testing baseline accuracy (always background): 0.950451
+
+--- NN TRAINING HISTORY ---
+NN Training START elapsed time: 43.6984 s
+NN epoch: 1
+NN mean training batch loss: 0.0308731
+NN testing loss: 0.0249094
+NN testing precision: 0.885091
+NN epoch: 2
+NN mean training batch loss: 0.0243648
+NN testing loss: 0.0249695
+NN testing precision: 0.856504
+NN epoch: 3
+NN mean training batch loss: 0.0231303
+NN testing loss: 0.0226799
+NN testing precision: 0.883142
+NN epoch: 4
+NN mean training batch loss: 0.0227339
+NN testing loss: 0.0221854
+NN testing precision: 0.899218
+NN epoch: 5
+NN mean training batch loss: 0.0226114
+NN testing loss: 0.022542
+NN testing precision: 0.883268
+NN epoch: 6
+NN mean training batch loss: 0.0224402
+NN testing loss: 0.0218587
+NN testing precision: 0.90148
+NN epoch: 7
+NN mean training batch loss: 0.0223773
+NN testing loss: 0.0219916
+NN testing precision: 0.891116
+NN Training END elapsed time: 1298.14 s
+Trained NN model: MlTemp/DrellYan_NN_0889.pt
+NN training COMPLETE elapsed time: 1298.29 s
+Trained NN model: MlTemp/DrellYan_NN_0889.pt
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+Unique certified luminosity blocks: 1471
+Integrated luminosity [fb^-1]: 0.271945
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+
+--- NN EVALUATION DATA ---
+Testing dataframe events: 6181964
+Testing dataframe DY events: 309625
+Testing dataframe DY [%]: 5.00852
+NN evaluation input events: 6181964
+NN evaluation valid events: 6181962
+NN evaluation skipped non-finite events: 2
+NN evaluation signal: 309625
+NN evaluation background: 5872337
+
+--- NN evaluation ---
+Model file: MlTemp/DrellYan_NN_0889.pt
+Evaluation usage [%]: 100
+Evaluation random seed: 1
+Evaluation batch size: 1024
+Evaluation threads: 4
+Evaluated events: 6181962
+Model selected events: 325354
+Decision threshold: 0.5
+True positives: 290026
+True negatives: 5.83701e+06
+False positives: 35328
+False negatives: 19599
+Accuracy: 0.991115
+PRECISION: 0.891417
+Recall: 0.936701
+Background rejection: 0.993984
+F1: 0.913498
+ROC AUC: 0.998349
+Log-loss: 0.0222445
+S/sqrt(S+B): 508.462
+NN evaluation COMPLETE elapsed time: 1474.87 s
+MlRun complete elapsed time: 1474.91 s

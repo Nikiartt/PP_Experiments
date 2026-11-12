@@ -453,7 +453,7 @@ std::string trainDrellYanBdt(
     return weightsFile;
 }
 
-struct BdtPredictionResult {
+struct PredictionResult {
     double truePositive = 0.0, trueNegative = 0.0, falsePositive = 0.0, falseNegative = 0.0;
     ULong64_t evaluatedEvents = 0;
     std::vector<std::pair<float, int>> scoredEvents;
@@ -461,7 +461,7 @@ struct BdtPredictionResult {
     std::vector<ULong64_t> rejectedIndices;
 };
 
-BdtPredictionResult RunMcDrellYanBdtPrediction(
+PredictionResult RunMcDrellYanBdtPrediction(
     const std::vector<std::string>& features, ROOT::RDF::RNode evaluationDf,
     const std::string& weightsFile, const std::string& methodName, double decisionThreshold)
 {
@@ -501,7 +501,7 @@ BdtPredictionResult RunMcDrellYanBdtPrediction(
     std::cout << "Model loaded\n";
     std::cout << "Starting event-by-event model evaluation\n";
 
-    BdtPredictionResult result;
+    PredictionResult result;
 
     for (size_t entry = 0; entry < labels->size(); ++entry) {
         bool valid = true;
@@ -1547,7 +1547,212 @@ void CreateBdtRealDataMcComparisonHistograms(
     }
 }
 
-void evaluateDrellYanBdt(
+
+struct EvaluationPropertyBins {
+    std::string name, axis;
+    double min = 0.0, max = 0.0;
+    std::vector<std::array<double, 100>> sources;
+    std::array<std::array<double, 100>, 4> outcomes{}; // TP, TN, FP, FN
+};
+
+void SaveEvaluationPropertyPlot(
+    const EvaluationPropertyBins& data,
+    const std::vector<std::string>& sourceNames,
+    const std::string& modelTag, int view)
+{
+    const char* suffix[] = {"accuracy_precision", "tp", "tn_fp_fn"};
+    const char* description[] = {"accuracy and precision", "true positives", "TN / FP / FN"};
+    const char* labels[3][3] = {
+        {"Accuracy", "Precision", ""},
+        {"True positive", "", ""},
+        {"True negative", "False positive", "False negative"}
+    };
+    const int lineColors[3][3] = {
+        {kAzure + 1, kRed + 1, kBlack},
+        {kGreen + 2, kBlack, kBlack},
+        {kAzure + 1, kRed + 1, kOrange + 7}
+    };
+    const int curveCount[] = {2, 1, 3};
+    const std::string shortName = data.name == "Dimuon_mass" ? "mass" : data.name;
+    const std::string base = modelTag + "_" + shortName + "_by_source_" + suffix[view];
+    const std::string model = modelTag == "bdt" ? "BDT" : "NN";
+    const double width = (data.max - data.min) / 100.0;
+
+    TCanvas canvas((base + "_canvas").c_str(), "", 1250, 900);
+    TPad upper((base + "_upper").c_str(), "", 0, 0.32, 1, 1);
+    TPad lower((base + "_lower").c_str(), "", 0, 0, 1, 0.32);
+    for (TPad* pad : {&upper, &lower}) {
+        pad->SetLeftMargin(0.12); pad->SetRightMargin(0.24); pad->SetTicks(1, 1);
+    }
+    upper.SetBottomMargin(0.03); lower.SetTopMargin(0.03); lower.SetBottomMargin(0.32);
+    upper.Draw(); lower.Draw(); upper.cd();
+
+    const std::string title = model + " " + data.axis + " by source and " +
+                              description[view] + ";;Events / bin";
+    THStack stack((base + "_stack").c_str(), title.c_str());
+    TLegend sourceLegend(0.78, 0.40, 0.99, 0.92);
+    sourceLegend.SetBorderSize(0); sourceLegend.SetTextSize(0.025);
+    std::vector<std::unique_ptr<TH1D>> hists;
+    const int paletteSize = std::max(1, TColor::GetNumberOfColors());
+    double maxEvents = 1.0;
+
+    for (size_t s = 0; s < sourceNames.size(); ++s) {
+        auto hist = std::make_unique<TH1D>(
+            (base + "_source_" + std::to_string(s)).c_str(), "",
+            100, data.min, data.max);
+        const int color = TColor::GetColorPalette(static_cast<int>(
+            s * (paletteSize - 1) / std::max<size_t>(1, sourceNames.size() - 1)));
+        hist->SetDirectory(nullptr); hist->SetStats(false);
+        hist->SetFillColor(color); hist->SetLineColor(color); hist->SetLineWidth(2);
+        for (int bin = 0; bin < 100; ++bin)
+            hist->SetBinContent(bin + 1, data.sources[s][bin]);
+        stack.Add(hist.get());
+        sourceLegend.AddEntry(hist.get(), sourceNames[s].c_str(), "f");
+        hists.push_back(std::move(hist));
+    }
+    for (int bin = 0; bin < 100; ++bin) {
+        double total = 0.0;
+        for (const auto& source : data.sources) total += source[bin];
+        maxEvents = std::max(maxEvents, total);
+    }
+    stack.SetMinimum(0.0); stack.SetMaximum(maxEvents * 1.2);
+    stack.Draw("HIST"); stack.GetXaxis()->SetLabelSize(0);
+    sourceLegend.Draw();
+
+    lower.cd();
+    const std::string yTitle = view == 0 ? "Fraction" :
+                               view == 1 ? "True positives / bin" : "Events / bin";
+    const std::string frameTitle = ";" + data.axis + ";" + yTitle;
+    TH1D frame((base + "_frame").c_str(), frameTitle.c_str(),
+               100, data.min, data.max);
+    frame.SetDirectory(nullptr); frame.SetStats(false);
+    double maxLower = 1.0;
+    if (view != 0) {
+        const int first = view == 1 ? 0 : 1;
+        const int last = view == 1 ? 0 : 3;
+        for (int kind = first; kind <= last; ++kind)
+            for (double value : data.outcomes[kind])
+                maxLower = std::max(maxLower, value);
+    }
+    frame.SetMinimum(0.0); frame.SetMaximum(view == 0 ? 1.05 : maxLower * 1.15);
+    frame.GetYaxis()->SetTitleSize(0.10); frame.GetYaxis()->SetTitleOffset(0.55);
+    frame.GetYaxis()->SetLabelSize(0.085);
+    frame.GetXaxis()->SetTitleSize(0.11); frame.GetXaxis()->SetLabelSize(0.095);
+    frame.Draw("AXIS");
+
+    TGraph graphs[3];
+    TLegend metricLegend(0.78, view == 2 ? 0.53 : 0.65, 0.99, 0.92);
+    metricLegend.SetBorderSize(0); metricLegend.SetTextSize(0.075);
+    for (int curve = 0; curve < curveCount[view]; ++curve) {
+        for (int bin = 0; bin < 100; ++bin) {
+            const double tp = data.outcomes[0][bin], tn = data.outcomes[1][bin];
+            const double fp = data.outcomes[2][bin], fn = data.outcomes[3][bin];
+            const double total = tp + tn + fp + fn;
+            const double value = view == 0
+                ? (curve == 0 ? (total > 0 ? (tp + tn) / total : 0.0)
+                              : (tp + fp > 0 ? tp / (tp + fp) : 0.0))
+                : data.outcomes[view == 1 ? 0 : curve + 1][bin];
+            graphs[curve].SetPoint(bin, data.min + (bin + 0.5) * width, value);
+        }
+        graphs[curve].SetLineColor(lineColors[view][curve]);
+        graphs[curve].SetLineWidth(2); graphs[curve].Draw("L SAME");
+        metricLegend.AddEntry(&graphs[curve], labels[view][curve], "l");
+    }
+    metricLegend.Draw();
+
+    gSystem->mkdir("Images", true);
+    const std::string file = "Images/" + base + ".png";
+    canvas.SaveAs(file.c_str());
+    logValue("Evaluation property plot saved", file);
+}
+
+void CreateEvaluationPropertyPlots(
+    ROOT::RDF::RNode evaluationDf,
+    const std::shared_ptr<std::unordered_set<ULong64_t>>& selectedIndices,
+    const std::vector<ULong64_t>& rejectedIndices,
+    const std::vector<std::string>& backgroundFilesPaths,
+    const std::string& modelTag)
+{
+    if (modelTag != "bdt" && modelTag != "nn")
+        throw std::runtime_error("Evaluation plot model must be bdt or nn");
+
+    struct Spec { const char* name; const char* axis; double min, max; };
+    const Spec specs[] = {
+        {"LeadingMuon_pt",     "Leading muon p_{T} [GeV]",    0, 140},
+        {"LeadingMuon_eta",    "Leading muon #eta",         -2.4, 2.4},
+        {"LeadingMuon_phi",    "Leading muon #phi [rad]",   -3.2, 3.2},
+        {"SubleadingMuon_pt",  "Subleading muon p_{T} [GeV]", 0, 140},
+        {"SubleadingMuon_eta", "Subleading muon #eta",      -2.4, 2.4},
+        {"SubleadingMuon_phi", "Subleading muon #phi [rad]", -3.2, 3.2},
+        {"Dimuon_mass",        "Dimuon mass [GeV]",          50, 150},
+        {"Dimuon_pt",          "Dimuon p_{T} [GeV]",           0, 200},
+        {"Dimuon_rapidity",    "Dimuon rapidity",             -3, 3},
+        {"Dimuon_phi",         "Dimuon #phi [rad]",          -3.2, 3.2}
+    };
+
+    std::vector<std::string> sourceNames{"main_dy"};
+    for (std::string path : backgroundFilesPaths) {
+        const size_t slash = path.find_last_of("/\\");
+        if (slash != std::string::npos) path.erase(0, slash + 1);
+        const std::string suffix = "_xrootd_files.txt";
+        if (path.size() >= suffix.size() &&
+            path.compare(path.size() - suffix.size(), suffix.size(), suffix) == 0)
+            path.erase(path.size() - suffix.size());
+        sourceNames.push_back(path);
+    }
+
+    std::vector<EvaluationPropertyBins> plots;
+    for (const auto& spec : specs) {
+        plots.emplace_back();
+        auto& plot = plots.back();
+        plot.name = spec.name; plot.axis = spec.axis;
+        plot.min = spec.min; plot.max = spec.max;
+        plot.sources.resize(sourceNames.size());
+    }
+
+    const std::unordered_set<ULong64_t> rejected(rejectedIndices.begin(), rejectedIndices.end());
+    std::mutex countsMutex;
+    auto prepared = makeMuonAndDimuonKinematicsDataFrame(evaluationDf);
+    prepared.Foreach(
+        [&](ULong64_t index, UInt_t source, bool truth,
+            float leadPt, float leadEta, float leadPhi,
+            float subPt, float subEta, float subPhi,
+            float mass, float dimuonPt, float rapidity, float dimuonPhi) {
+            const bool predictedDy = selectedIndices->count(index) != 0;
+            if (!predictedDy && rejected.count(index) == 0) return;
+            if (source < 1 || static_cast<size_t>(source) > sourceNames.size())
+                throw std::runtime_error("Unknown MC source in evaluation plot");
+
+            const std::array<float, 10> values{
+                leadPt, leadEta, leadPhi, subPt, subEta, subPhi,
+                mass, dimuonPt, rapidity, dimuonPhi
+            };
+            const int kind = truth ? (predictedDy ? 0 : 3) : (predictedDy ? 2 : 1);
+            std::lock_guard<std::mutex> lock(countsMutex);
+            for (size_t i = 0; i < plots.size(); ++i) {
+                const auto& plot = plots[i];
+                const double value = values[i];
+                if (!std::isfinite(value) || value < plot.min || value >= plot.max)
+                    continue;
+                const int bin = static_cast<int>((value - plot.min) * 100.0 /
+                                                 (plot.max - plot.min));
+                if (bin < 0 || bin >= 100) continue;
+                ++plots[i].sources[source - 1][bin];
+                ++plots[i].outcomes[kind][bin];
+            }
+        },
+        {"Index", "FILE_CLASSIFICATOR", "IsDyProcess",
+         "LeadingMuon_pt", "LeadingMuon_eta", "LeadingMuon_phi",
+         "SubleadingMuon_pt", "SubleadingMuon_eta", "SubleadingMuon_phi",
+         "Dimuon_mass", "Dimuon_pt", "Dimuon_rapidity", "Dimuon_phi"});
+
+    for (const auto& plot : plots)
+        for (int view = 0; view < 3; ++view)
+            SaveEvaluationPropertyPlot(plot, sourceNames, modelTag, view);
+}
+
+
+PredictionResult evaluateDrellYanBdt(
     const std::vector<std::string>& features,
     ROOT::RDF::RNode testingDf,
     ROOT::RDF::RNode realDataDf,
@@ -1616,7 +1821,7 @@ void evaluateDrellYanBdt(
     if (!evaluationDf.HasColumn("IsDyProcess"))
         throw std::runtime_error("Testing dataframe is missing IsDyProcess");
 
-    BdtPredictionResult mcPrediction = RunMcDrellYanBdtPrediction(features, evaluationDf, weightsFile, methodName, decisionThreshold);
+    PredictionResult mcPrediction = RunMcDrellYanBdtPrediction(features, evaluationDf, weightsFile, methodName, decisionThreshold);
 
     std::cout << "Evaluated events: " << mcPrediction.evaluatedEvents << "\n";
     std::cout << "Model-selected DY events: " << mcPrediction.selectedIndices->size() << "\n";
@@ -1702,38 +1907,42 @@ void evaluateDrellYanBdt(
             return (index * 3571ULL + randomSeed) % 10000ULL < histogramKeepThreshold;
         }, {"Index"});
 
-    CreateBdtPredictionHistograms(histogramDf, mcPrediction.selectedIndices);//Model predicted as true DY
-    CreateBdtFalseHistograms(evaluationDf, mcPrediction.rejectedIndices, mcPrediction.trueNegative, mcPrediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
-    CreateBdtDifferenceHistograms(histogramDf, mcPrediction.selectedIndices);
-    CreateBackgroundPredictionHistograms(testingDf, mcPrediction.selectedIndices, backgroundFilesPaths);
-    CreateBdtPositiveSourceHistograms(evaluationDf, mcPrediction.selectedIndices, backgroundFilesPaths);
-    CreateBdtRejectedSourceHistograms(evaluationDf, mcPrediction.rejectedIndices, backgroundFilesPaths);
-    CreateEvaluationDataHistograms(testingDf);
+    // CreateBdtPredictionHistograms(histogramDf, mcPrediction.selectedIndices);//Model predicted as true DY
+    // CreateBdtFalseHistograms(evaluationDf, mcPrediction.rejectedIndices, mcPrediction.trueNegative, mcPrediction.falseNegative, falseHistogramUsagePercentage, randomSeed); //Model predicted as false DY
+    // CreateBdtDifferenceHistograms(histogramDf, mcPrediction.selectedIndices);
+    // CreateBackgroundPredictionHistograms(testingDf, mcPrediction.selectedIndices, backgroundFilesPaths);
+    // CreateBdtPositiveSourceHistograms(evaluationDf, mcPrediction.selectedIndices, backgroundFilesPaths);
+    // CreateBdtRejectedSourceHistograms(evaluationDf, mcPrediction.rejectedIndices, backgroundFilesPaths);
+    // CreateEvaluationDataHistograms(testingDf);
 
     //REAL DATA PREDICTION
-    auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realEvaluationDf, weightsFile, methodName, decisionThreshold);
+    // auto realDataPrediction = RunRealDataDrellYanBdtPrediction(features, realEvaluationDf, weightsFile, methodName, decisionThreshold);
 
-        CreateBdtRealDataMcComparisonHistograms(evaluationDf,
-            realEvaluationDf,
-            mcPrediction.selectedIndices,
-            mcPrediction.rejectedIndices,
-            realDataPrediction,
-            mcScales,
-            backgroundFilesPaths);
+    //     CreateBdtRealDataMcComparisonHistograms(evaluationDf,
+    //         realEvaluationDf,
+    //         mcPrediction.selectedIndices,
+    //         mcPrediction.rejectedIndices,
+    //         realDataPrediction,
+    //         mcScales,
+    //         backgroundFilesPaths);
 
-    {
-        const size_t total = realDataPrediction.size();
-        size_t selected = 0;
-        for (const auto& event : realDataPrediction) selected += event.predictedDy;
+    // {
+    //     const size_t total = realDataPrediction.size();
+    //     size_t selected = 0;
+    //     for (const auto& event : realDataPrediction) selected += event.predictedDy;
 
-        logLine("\n--- REAL-DATA BDT PREDICTION ---");
-        logValue("Real-data events predicted", total);
-        logValue("Real-data predicted DY", selected);
-        logValue("Real-data predicted non-DY", total - selected);
-    }
+    //     logLine("\n--- REAL-DATA BDT PREDICTION ---");
+    //     logValue("Real-data events predicted", total);
+    //     logValue("Real-data predicted DY", selected);
+    //     logValue("Real-data predicted non-DY", total - selected);
+    // }
+
+    // CreateEvaluationPropertyPlots(histogramDf, mcPrediction.selectedIndices, mcPrediction.rejectedIndices, backgroundFilesPaths, "bdt");
 
     logElapsedTime("BDT evaluation COMPLETE");
     std::cout << "evaluateDrellYanBdt END\n";
+
+    return mcPrediction;
 }
 
 struct NnData {
@@ -1983,7 +2192,8 @@ std::string trainDrellYanNn(
     unsigned randomSeed,
     double datasetUsagePercentage,
     unsigned numberOfThreads,
-    double decisionThreshold)
+    double decisionThreshold,
+    double& trainMaxPrecision)
 {
     std::cout << "trainDrellYanNn START\n";
     std::cout << "Features: " << features.size() << "\n";
@@ -2005,6 +2215,8 @@ std::string trainDrellYanNn(
         throw std::runtime_error("NN training/testing dataframe is missing Index");
     if (!std::isfinite(decisionThreshold) || decisionThreshold < 0.0 || decisionThreshold > 1.0)
         throw std::runtime_error("NN decision threshold must be in [0, 1]");
+    if (!std::isfinite(trainMaxPrecision) || trainMaxPrecision < 0.0 || trainMaxPrecision > 1.0)
+        throw std::runtime_error("TrainMaxPrecision must be in [0, 1]");
 
     const ULong64_t keepThreshold = static_cast<ULong64_t>(std::llround(datasetUsagePercentage * 100.0));
     if (keepThreshold == 0) throw std::runtime_error("Dataset usage percentage rounds to zero");
@@ -2083,6 +2295,29 @@ std::string trainDrellYanNn(
 
     TGraph trainingLossGraph(numberOfEpochs), testingLossGraph(numberOfEpochs), precisionGraph(numberOfEpochs);
 
+    std::string layerTag;//Saving of intermediade highes precision models
+    for (size_t i = 0; i < hiddenLayers.size(); ++i) {
+        if (i > 0) layerTag += ".";
+        layerTag += std::to_string(hiddenLayers[i]);
+    }
+
+    auto saveModelCheckpoint = [&](const std::string& outputFile) {
+        model->eval();
+        torch::serialize::OutputArchive archive, modelArchive;
+        model->save(modelArchive);
+        archive.write("model", modelArchive);
+        archive.write("features", c10::IValue(getNnFeatureSchema(features)));
+        archive.write("hidden_layers", torch::tensor(hiddenLayers, torch::kInt64), true);
+        archive.write("dropout", torch::tensor(dropoutProbability, torch::kFloat64), true);
+
+        const std::string directory = gSystem->DirName(outputFile.c_str());
+        gSystem->mkdir(directory.c_str(), true);
+        archive.save_to(outputFile);
+
+        if (!std::ifstream(outputFile, std::ios::binary))
+            throw std::runtime_error("NN model was not created: " + outputFile);
+    };
+
     for (unsigned epoch = 0; epoch < numberOfEpochs; ++epoch) {
         model->train();
         auto order = torch::randperm(trainingEvents, torch::TensorOptions().dtype(torch::kInt64));
@@ -2120,6 +2355,20 @@ std::string trainDrellYanNn(
         logValue("NN mean training batch loss", trainingLoss);
         logValue("NN testing loss", testingLoss);
         logValue("NN testing precision", precision);
+
+        if (precision > trainMaxPrecision) {
+            trainMaxPrecision = precision;
+
+            const std::string checkpointFile =
+                "MlTemp/DrellYan_NN_Layers{" + layerTag + "}_Precision" +
+                std::to_string(trainMaxPrecision) + "_Epoch" +
+                std::to_string(epoch + 1) + ".pt";
+
+            saveModelCheckpoint(checkpointFile);
+            logValue("NN record-high precision checkpoint", checkpointFile);
+            logValue("NN TrainMaxPrecision", trainMaxPrecision);
+        }
+
     }
 
     gSystem->mkdir("Images", true);
@@ -2143,6 +2392,7 @@ std::string trainDrellYanNn(
     logElapsedTime("NN Training END");
 
     //Save architecture, feature order, normalization buffers and trained weights together.
+    saveModelCheckpoint(modelFile);
     model->eval();
     torch::serialize::OutputArchive archive, modelArchive;
     model->save(modelArchive);
@@ -2164,7 +2414,7 @@ std::string trainDrellYanNn(
     return modelFile;
 }
 
-void evaluateDrellYanNn(
+PredictionResult evaluateDrellYanNn(
     const std::vector<std::string>& features,
     ROOT::RDF::RNode testingDf,
     ROOT::RDF::RNode realEvaluationDf,
@@ -2348,22 +2598,332 @@ void evaluateDrellYanNn(
     // CreateBdtPositiveSourceHistograms(evaluationDf, selectedIndices, backgroundFilesPaths);
     // CreateBdtRejectedSourceHistograms(evaluationDf, rejectedIndices, backgroundFilesPaths);
     // CreateEvaluationDataHistograms(testingDf);
+    // auto filteredRealEvaluationDf = realEvaluationDf.Filter(useEvaluationEvent, {"Index"});
+    // auto realDataPrediction = RunRealDataDrellYanNnPrediction(features, filteredRealEvaluationDf, model, decisionThreshold, batchSize);
 
-    auto realDataPrediction = RunRealDataDrellYanNnPrediction(
-        features, realEvaluationDf, model, decisionThreshold, batchSize);
-    CreateBdtRealDataMcComparisonHistograms(
-        evaluationDf, realEvaluationDf,
-        selectedIndices, rejectedIndices,
-        realDataPrediction, mcScales, backgroundFilesPaths, "nn");
+    // CreateBdtRealDataMcComparisonHistograms(
+    //     evaluationDf, filteredRealEvaluationDf, selectedIndices,
+    //     rejectedIndices, realDataPrediction, mcScales,
+    //     backgroundFilesPaths, "nn");
 
-    const size_t realSelected = static_cast<size_t>(std::count_if(
-        realDataPrediction.begin(), realDataPrediction.end(),
-        [](const RealDataBdtPrediction& event) { return event.predictedDy; }));
-    logLine("\n--- REAL-DATA NN PREDICTION ---");
-    logValue("Real-data events predicted", realDataPrediction.size());
-    logValue("Real-data predicted DY", realSelected);
-    logValue("Real-data predicted non-DY", realDataPrediction.size() - realSelected);
+    // const size_t realSelected = static_cast<size_t>(std::count_if(
+    //     realDataPrediction.begin(), realDataPrediction.end(),
+    //     [](const RealDataBdtPrediction& event) { return event.predictedDy; }));
+    // logLine("\n--- REAL-DATA NN PREDICTION ---");
+    // logValue("Real-data events predicted", realDataPrediction.size());
+    // logValue("Real-data predicted DY", realSelected);
+    // logValue("Real-data predicted non-DY", realDataPrediction.size() - realSelected);
+
+    // CreateEvaluationPropertyPlots(histogramDf, selectedIndices, rejectedIndices, backgroundFilesPaths, "nn");
+    
+    
     logElapsedTime("NN evaluation COMPLETE");
     std::cout << "evaluateDrellYanNn END\n";
+
+    PredictionResult result;
+    result.truePositive = truePositive;
+    result.trueNegative = trueNegative;
+    result.falsePositive = falsePositive;
+    result.falseNegative = falseNegative;
+    result.evaluatedEvents = static_cast<ULong64_t>(evaluatedEvents);
+    result.scoredEvents = std::move(scoredEvents);
+    result.selectedIndices = std::move(selectedIndices);
+    result.rejectedIndices = std::move(rejectedIndices);
+    return result;
+
 }
+
+struct CombinedEvaluationPlot {
+    EvaluationPropertyBins mc;
+    // Model 0 = NN, model 1 = BDT; outcome 0..3 = TP, TN, FP, FN.
+    std::array<std::array<std::array<double, 100>, 4>, 2> outcomes{};
+};
+
+void SaveFullMcPropertyHistogram(
+    const CombinedEvaluationPlot& plot,
+    const std::vector<std::string>& sourceNames)
+{
+    const auto& mc = plot.mc;
+    const std::string base = "nn_bdt_" + mc.name + "_mc";
+    TCanvas canvas((base + "_canvas").c_str(), "", 1250, 900);
+    canvas.SetLeftMargin(0.12);
+    canvas.SetRightMargin(0.24);
+
+    THStack stack((base + "_stack").c_str(),
+                  ("MC " + mc.axis + " by source;" + mc.axis + ";Events / bin").c_str());
+    TLegend legend(0.78, 0.40, 0.99, 0.92);
+    legend.SetBorderSize(0);
+    legend.SetTextSize(0.025);
+    std::vector<std::unique_ptr<TH1D>> hists;
+    const int paletteSize = std::max(1, TColor::GetNumberOfColors());
+    double maxEvents = 1.0;
+
+    for (size_t s = 0; s < sourceNames.size(); ++s) {
+        auto hist = std::make_unique<TH1D>(
+            (base + "_source_" + std::to_string(s)).c_str(), "",
+            100, mc.min, mc.max);
+        hist->SetDirectory(nullptr);
+        hist->SetStats(false);
+        const int color = TColor::GetColorPalette(static_cast<int>(
+            s * (paletteSize - 1) / std::max<size_t>(1, sourceNames.size() - 1)));
+        hist->SetFillColor(color);
+        hist->SetLineColor(color);
+        for (int bin = 0; bin < 100; ++bin)
+            hist->SetBinContent(bin + 1, mc.sources[s][bin]);
+        stack.Add(hist.get());
+        legend.AddEntry(hist.get(), sourceNames[s].c_str(), "f");
+        hists.push_back(std::move(hist));
+    }
+
+    for (int bin = 0; bin < 100; ++bin) {
+        double total = 0.0;
+        for (const auto& source : mc.sources) total += source[bin];
+        maxEvents = std::max(maxEvents, total);
+    }
+    stack.SetMinimum(0.0);
+    stack.SetMaximum(maxEvents * 1.2);
+    stack.Draw("HIST");
+    legend.Draw();
+
+    const std::string file = "Images/" + base + ".png";
+    canvas.SaveAs(file.c_str());
+    logValue("Combined evaluation plot saved", file);
+}
+
+void SaveCombinedModelMetrics(const CombinedEvaluationPlot& plot)
+{
+    const auto& mc = plot.mc;
+    const std::string base = "nn_bdt_" + mc.name + "_metrics";
+    const double width = (mc.max - mc.min) / 100.0;
+    const int colors[4] = {kBlue + 1, kRed + 1, kGreen + 2, kOrange + 7};
+    const char* ratioNames[4] = {
+        "TP NN/BDT", "TN NN/BDT", "FP NN/BDT", "FN NN/BDT"
+    };
+    const char* titles[3] = {"Accuracy", "Precision", "NN / BDT"};
+
+    TCanvas canvas((base + "_canvas").c_str(), "", 1250, 1200);
+    std::array<std::unique_ptr<TPad>, 3> pads;
+    std::array<std::unique_ptr<TH1D>, 3> frames;
+    std::array<std::array<TGraph, 4>, 3> curves;
+    std::array<std::vector<std::unique_ptr<TLine>>, 3> segments;
+    std::array<std::unique_ptr<TLegend>, 3> legends;
+    std::unique_ptr<TLine> unity;
+
+    const double bottoms[3] = {0.68, 0.35, 0.00};
+    const double tops[3] = {1.00, 0.68, 0.35};
+    double maxRatio = 1.0;
+    for (int bin = 0; bin < 100; ++bin) {
+        for (int kind = 0; kind < 4; ++kind) {
+            const double bdtCount = plot.outcomes[1][kind][bin];
+            if (bdtCount > 0.0)
+                maxRatio = std::max(
+                    maxRatio, plot.outcomes[0][kind][bin] / bdtCount);
+        }
+    }
+
+    for (int panel = 0; panel < 3; ++panel) {
+        pads[panel] = std::make_unique<TPad>(
+            (base + "_pad_" + std::to_string(panel)).c_str(), "",
+            0, bottoms[panel], 1, tops[panel]);
+        TPad& pad = *pads[panel];
+        pad.SetLeftMargin(0.12);
+        pad.SetRightMargin(0.24);
+        pad.SetTopMargin(0.07);
+        pad.SetBottomMargin(panel == 2 ? 0.28 : 0.06);
+        pad.SetTicks(1, 1);
+        pad.Draw();
+        pad.cd();
+
+        const std::string title =
+            ";" + std::string(panel == 2 ? mc.axis : "") + ";" + titles[panel];
+        frames[panel] = std::make_unique<TH1D>(
+            (base + "_frame_" + std::to_string(panel)).c_str(),
+            title.c_str(), 100, mc.min, mc.max);
+        TH1D& frame = *frames[panel];
+        frame.SetDirectory(nullptr);
+        frame.SetStats(false);
+        frame.SetMinimum(0.0);
+        frame.SetMaximum(panel == 2 ? maxRatio * 1.15 : 1.05);
+        frame.GetYaxis()->SetTitleSize(0.075);
+        frame.GetYaxis()->SetTitleOffset(0.75);
+        frame.GetYaxis()->SetLabelSize(0.065);
+        frame.GetXaxis()->SetTitleSize(0.085);
+        frame.GetXaxis()->SetLabelSize(panel == 2 ? 0.075 : 0.0);
+        frame.Draw("AXIS");
+
+        if (panel == 2) {
+            unity = std::make_unique<TLine>(mc.min, 1.0, mc.max, 1.0);
+            unity->SetLineStyle(2);
+            unity->SetLineColor(kGray + 2);
+            unity->Draw();
+        }
+
+        std::array<bool, 4> previousValid{};
+        std::array<double, 4> previousX{}, previousY{};
+        const int curveCount = panel == 2 ? 4 : 2;
+        for (int bin = 0; bin < 100; ++bin) {
+            const double x = mc.min + (bin + 0.5) * width;
+            for (int c = 0; c < curveCount; ++c) {
+                double value = 0.0;
+                if (panel < 2) {
+                    const auto& outcome = plot.outcomes[c];
+                    const double tp = outcome[0][bin], tn = outcome[1][bin];
+                    const double fp = outcome[2][bin], fn = outcome[3][bin];
+                    const double denominator =
+                        panel == 0 ? tp + tn + fp + fn : tp + fp;
+                    if (denominator == 0.0) {
+                        previousValid[c] = false;
+                        continue;
+                    }
+                    value = panel == 0 ? (tp + tn) / denominator
+                                       : tp / denominator;
+                } else {
+                    const double bdtCount = plot.outcomes[1][c][bin];
+                    if (bdtCount == 0.0) {
+                        previousValid[c] = false;
+                        continue;
+                    }
+                    value = plot.outcomes[0][c][bin] / bdtCount;
+                }
+
+                if (previousValid[c]) {
+                    auto line = std::make_unique<TLine>(
+                        previousX[c], previousY[c], x, value);
+                    line->SetLineColor(colors[c]);
+                    line->SetLineWidth(2);
+                    line->Draw();
+                    segments[panel].push_back(std::move(line));
+                }
+                curves[panel][c].SetPoint(curves[panel][c].GetN(), x, value);
+                previousX[c] = x;
+                previousY[c] = value;
+                previousValid[c] = true;
+            }
+        }
+
+        legends[panel] = std::make_unique<TLegend>(0.78, 0.55, 0.99, 0.92);
+        legends[panel]->SetBorderSize(0);
+        legends[panel]->SetTextSize(0.06);
+        for (int c = 0; c < curveCount; ++c) {
+            TGraph& curve = curves[panel][c];
+            curve.SetLineColor(colors[c]);
+            curve.SetLineWidth(2);
+            curve.SetMarkerColor(colors[c]);
+            curve.SetMarkerStyle(20);
+            curve.SetMarkerSize(0.8);
+            curve.Draw("P SAME");
+            legends[panel]->AddEntry(
+                &curve, panel == 2 ? ratioNames[c] : (c == 0 ? "NN" : "BDT"),
+                "lp");
+        }
+        legends[panel]->Draw();
+        canvas.cd();
+    }
+
+    const std::string file = "Images/" + base + ".png";
+    canvas.SaveAs(file.c_str());
+    logValue("Combined evaluation plot saved", file);
+}
+
+void ModelsEvaluation(
+    ROOT::RDF::RNode histogramDf,
+    const PredictionResult& nn,
+    const PredictionResult& bdt,
+    const std::string& nnModel,
+    const std::string& bdtModel,
+    const std::vector<std::string>& backgroundFilesPaths)
+{
+    struct Spec { const char* name; const char* axis; double min, max; };
+    const Spec specs[] = {
+        {"LeadingMuon_pt", "Leading muon p_{T} [GeV]", 0, 140},
+        {"LeadingMuon_eta", "Leading muon #eta", -2.4, 2.4},
+        {"LeadingMuon_phi", "Leading muon #phi [rad]", -3.2, 3.2},
+        {"SubleadingMuon_pt", "Subleading muon p_{T} [GeV]", 0, 140},
+        {"SubleadingMuon_eta", "Subleading muon #eta", -2.4, 2.4},
+        {"SubleadingMuon_phi", "Subleading muon #phi [rad]", -3.2, 3.2},
+        {"Dimuon_mass", "Dimuon mass [GeV]", 50, 150},
+        {"Dimuon_pt", "Dimuon p_{T} [GeV]", 0, 200},
+        {"Dimuon_rapidity", "Dimuon rapidity", -3, 3},
+        {"Dimuon_phi", "Dimuon #phi [rad]", -3.2, 3.2}
+    };
+
+    logValue("Combined evaluation NN model", nnModel);
+    logValue("Combined evaluation BDT model", bdtModel);
+
+    std::vector<std::string> sourceNames{"main_dy"};
+    for (std::string path : backgroundFilesPaths) {
+        const size_t slash = path.find_last_of("/\\");
+        if (slash != std::string::npos) path.erase(0, slash + 1);
+        const std::string suffix = "_xrootd_files.txt";
+        if (path.size() >= suffix.size() &&
+            path.compare(path.size() - suffix.size(), suffix.size(), suffix) == 0)
+            path.erase(path.size() - suffix.size());
+        sourceNames.push_back(path);
+    }
+
+    std::vector<CombinedEvaluationPlot> plots;
+    for (const auto& spec : specs) {
+        plots.emplace_back();
+        auto& mc = plots.back().mc;
+        mc.name = spec.name;
+        mc.axis = spec.axis;
+        mc.min = spec.min;
+        mc.max = spec.max;
+        mc.sources.resize(sourceNames.size());
+    }
+
+    const std::unordered_set<ULong64_t> nnRejected(
+        nn.rejectedIndices.begin(), nn.rejectedIndices.end());
+    const std::unordered_set<ULong64_t> bdtRejected(
+        bdt.rejectedIndices.begin(), bdt.rejectedIndices.end());
+    std::mutex countsMutex;
+
+    auto prepared = makeMuonAndDimuonKinematicsDataFrame(histogramDf);
+    prepared.Foreach(
+        [&](ULong64_t index, UInt_t source, bool truth,
+            float leadPt, float leadEta, float leadPhi,
+            float subPt, float subEta, float subPhi,
+            float mass, float dimuonPt, float rapidity, float dimuonPhi) {
+            if (source < 1 || source > sourceNames.size())
+                throw std::runtime_error("Unknown MC source in combined evaluation");
+
+            const bool nnDy = nn.selectedIndices->count(index) != 0;
+            const bool bdtDy = bdt.selectedIndices->count(index) != 0;
+            const bool bothPredicted =
+                (nnDy || nnRejected.count(index)) &&
+                (bdtDy || bdtRejected.count(index));
+            const int nnKind = truth ? (nnDy ? 0 : 3) : (nnDy ? 2 : 1);
+            const int bdtKind = truth ? (bdtDy ? 0 : 3) : (bdtDy ? 2 : 1);
+            const std::array<float, 10> values{
+                leadPt, leadEta, leadPhi, subPt, subEta, subPhi,
+                mass, dimuonPt, rapidity, dimuonPhi
+            };
+
+            std::lock_guard<std::mutex> lock(countsMutex);
+            for (size_t i = 0; i < plots.size(); ++i) {
+                const auto& mc = plots[i].mc;
+                const double value = values[i];
+                if (!std::isfinite(value) || value < mc.min || value >= mc.max)
+                    continue;
+                const int bin = static_cast<int>(
+                    (value - mc.min) * 100.0 / (mc.max - mc.min));
+                ++plots[i].mc.sources[source - 1][bin];
+                if (bothPredicted) {
+                    ++plots[i].outcomes[0][nnKind][bin];
+                    ++plots[i].outcomes[1][bdtKind][bin];
+                }
+            }
+        },
+        {"Index", "FILE_CLASSIFICATOR", "IsDyProcess",
+         "LeadingMuon_pt", "LeadingMuon_eta", "LeadingMuon_phi",
+         "SubleadingMuon_pt", "SubleadingMuon_eta", "SubleadingMuon_phi",
+         "Dimuon_mass", "Dimuon_pt", "Dimuon_rapidity", "Dimuon_phi"});
+
+    gSystem->mkdir("Images", true);
+    for (const auto& plot : plots) {
+        SaveFullMcPropertyHistogram(plot, sourceNames);
+        SaveCombinedModelMetrics(plot);
+    }
+}
+
 #endif

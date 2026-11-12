@@ -1582,7 +1582,7 @@ struct ComparisonPlot {
 
 // docker start -ai cmscloud
 // root -l -b -q -e '.L filter_dy1.C' -e 'comparisonAnalysis()'
-void similar as in the comparisonAnalysis()
+void comparisonAnalysis()
 {
     resetExecutionTimer();
     resetLog();
@@ -1594,7 +1594,7 @@ void similar as in the comparisonAnalysis()
     const std::string LuminosityCsvPath = "Run2016H_MuonPhys_lumibyls.csv";
     
     const bool DEV_MODE = true;
-    const size_t DEV_N_FILES = 2;
+    const size_t DEV_N_FILES = 6;
     
     logValue("comparisonAnalysis", true);
     logValue("DEV_MODE", DEV_MODE);
@@ -1700,17 +1700,17 @@ void similar as in the comparisonAnalysis()
     logElapsedTime("Comparison histograms START");
 
     const std::vector<PlotSpec> plotSpecs = {
-        // {"LeadingMuon_pt", "LeadingMuon_pt", "Leading muon pT", "Leading muon pT [GeV]", 100, 0, 140},
-        // {"LeadingMuon_eta", "LeadingMuon_eta", "Leading muon eta", "Leading muon eta", 100, -2.4, 2.4},
-        // {"LeadingMuon_phi", "LeadingMuon_phi", "Leading muon phi", "Leading muon phi [rad]", 100, -3.2, 3.2},
-        // {"SubleadingMuon_pt", "SubleadingMuon_pt", "Subleading muon pT", "Subleading muon pT [GeV]", 100, 0, 140},
-        // {"SubleadingMuon_eta", "SubleadingMuon_eta", "Subleading muon eta", "Subleading muon eta", 100, -2.4, 2.4},
-        // {"SubleadingMuon_phi", "SubleadingMuon_phi", "Subleading muon phi", "Subleading muon phi [rad]", 100, -3.2, 3.2},
-        {"Dimuon_mass", "Dimuon_mass", "Dimuon invariant mass", "Dimuon mass [GeV]", 100, 50, 150}
-        // {"Dimuon_pt", "Dimuon_pt", "Dimuon pT", "Dimuon pT [GeV]", 100, 0, 200},
-        // {"Dimuon_rapidity", "Dimuon_rapidity", "Dimuon rapidity", "Dimuon rapidity", 100, -3, 3},
-        // {"Dimuon_phi", "Dimuon_phi", "Dimuon phi", "Dimuon phi [rad]", 100, -3.2, 3.2},
-        // {"Muon_pt", "Muon_pt", "Muon pT", "Muon pT [GeV]", 100, 0, 140}
+        {"LeadingMuon_pt", "LeadingMuon_pt", "Leading muon pT", "Leading muon pT [GeV]", 100, 0, 140},
+        {"LeadingMuon_eta", "LeadingMuon_eta", "Leading muon eta", "Leading muon eta", 100, -2.4, 2.4},
+        {"LeadingMuon_phi", "LeadingMuon_phi", "Leading muon phi", "Leading muon phi [rad]", 100, -3.2, 3.2},
+        {"SubleadingMuon_pt", "SubleadingMuon_pt", "Subleading muon pT", "Subleading muon pT [GeV]", 100, 0, 140},
+        {"SubleadingMuon_eta", "SubleadingMuon_eta", "Subleading muon eta", "Subleading muon eta", 100, -2.4, 2.4},
+        {"SubleadingMuon_phi", "SubleadingMuon_phi", "Subleading muon phi", "Subleading muon phi [rad]", 100, -3.2, 3.2},
+        {"Dimuon_mass", "Dimuon_mass", "Dimuon invariant mass", "Dimuon mass [GeV]", 100, 50, 150},
+        {"Dimuon_pt", "Dimuon_pt", "Dimuon pT", "Dimuon pT [GeV]", 100, 0, 200},
+        {"Dimuon_rapidity", "Dimuon_rapidity", "Dimuon rapidity", "Dimuon rapidity", 100, -3, 3},
+        {"Dimuon_phi", "Dimuon_phi", "Dimuon phi", "Dimuon phi [rad]", 100, -3.2, 3.2},
+        {"Muon_pt", "Muon_pt", "Muon pT", "Muon pT [GeV]", 100, 0, 140}
     };
 
     
