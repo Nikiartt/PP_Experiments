@@ -1,0 +1,316 @@
+Drell-Yan log
+
+[NN model parameters]
+Method: LibTorch dense neural network
+Device: CPU
+Optimizer: Adam
+Loss: BCEWithLogitsLoss
+Activation: ReLU
+Input normalization: Training mean and standard deviation
+Hidden layers: 3
+Hidden layer 1 neurons: 128
+Hidden layer 2 neurons: 64
+Hidden layer 3 neurons: 32
+Epochs: 50
+Batch size: 1024
+Learning rate: 0.0007
+Weight decay: 0.001
+Dropout probability: 0
+Random seed: 1
+Decision threshold: 0.5
+Model file: MlTemp/DrellYan_NN.pt
+Evaluation usage [%]: 10
+
+--- NN TRAINING FEATURES ---
+Number of features: 26
+Feature 1: MuonCount
+Feature 2: HLT_IsoMu24_f
+Feature 3: MET_pt
+Feature 4: HasMuonTrigger
+Feature 5: MinMuonTriggerDeltaR2
+Feature 6: MaxMuonTriggerPt
+Feature 7: Muon0_exists
+Feature 8: Muon0_pt
+Feature 9: Muon0_eta
+Feature 10: Muon0_charge
+Feature 11: Muon0_isGlobal
+Feature 12: Muon0_nStations
+Feature 13: Muon0_nTrackerLayers
+Feature 14: Muon0_dxy
+Feature 15: Muon0_ptErr
+Feature 16: Muon0_tkRelIso
+Feature 17: Muon1_exists
+Feature 18: Muon1_pt
+Feature 19: Muon1_eta
+Feature 20: Muon1_charge
+Feature 21: Muon1_isGlobal
+Feature 22: Muon1_nStations
+Feature 23: Muon1_nTrackerLayers
+Feature 24: Muon1_dxy
+Feature 25: Muon1_ptErr
+Feature 26: Muon1_tkRelIso
+
+--- NN TRAINING DATA ---
+NN data loading START elapsed time: 1.30182 s
+NN training input events: 577694
+NN training valid events: 577694
+NN training skipped non-finite events: 0
+NN training signal: 28858
+NN training background: 548836
+NN testing input events: 145061
+NN testing valid events: 145061
+NN testing skipped non-finite events: 0
+NN testing signal: 7212
+NN testing background: 137849
+NN data loading END elapsed time: 5.78515 s
+NN training baseline accuracy (always background): 0.950046
+NN testing baseline accuracy (always background): 0.950283
+
+--- NN TRAINING HISTORY ---
+NN Training START elapsed time: 6.00062 s
+NN epoch: 1
+NN mean training batch loss: 0.0654845
+NN testing loss: 0.0302425
+NN testing precision: 0.861253
+NN epoch: 2
+NN mean training batch loss: 0.0299208
+NN testing loss: 0.029329
+NN testing precision: 0.856446
+NN epoch: 3
+NN mean training batch loss: 0.0293412
+NN testing loss: 0.0290232
+NN testing precision: 0.859626
+NN epoch: 4
+NN mean training batch loss: 0.0291885
+NN testing loss: 0.0287214
+NN testing precision: 0.873007
+NN epoch: 5
+NN mean training batch loss: 0.0289108
+NN testing loss: 0.0283158
+NN testing precision: 0.863021
+NN epoch: 6
+NN mean training batch loss: 0.0286933
+NN testing loss: 0.0286497
+NN testing precision: 0.850208
+NN epoch: 7
+NN mean training batch loss: 0.0284591
+NN testing loss: 0.0278771
+NN testing precision: 0.863058
+NN epoch: 8
+NN mean training batch loss: 0.0281844
+NN testing loss: 0.0277439
+NN testing precision: 0.853699
+NN epoch: 9
+NN mean training batch loss: 0.0281754
+NN testing loss: 0.0274684
+NN testing precision: 0.872068
+NN epoch: 10
+NN mean training batch loss: 0.0279447
+NN testing loss: 0.0277988
+NN testing precision: 0.881167
+NN epoch: 11
+NN mean training batch loss: 0.0276222
+NN testing loss: 0.0283731
+NN testing precision: 0.839096
+NN epoch: 12
+NN mean training batch loss: 0.0276078
+NN testing loss: 0.0270374
+NN testing precision: 0.872012
+NN epoch: 13
+NN mean training batch loss: 0.0274494
+NN testing loss: 0.0273087
+NN testing precision: 0.886678
+NN epoch: 14
+NN mean training batch loss: 0.0274099
+NN testing loss: 0.0279558
+NN testing precision: 0.891839
+NN epoch: 15
+NN mean training batch loss: 0.0271286
+NN testing loss: 0.0269505
+NN testing precision: 0.857725
+NN epoch: 16
+NN mean training batch loss: 0.0273618
+NN testing loss: 0.0268404
+NN testing precision: 0.871214
+NN epoch: 17
+NN mean training batch loss: 0.0272223
+NN testing loss: 0.0271107
+NN testing precision: 0.862669
+NN epoch: 18
+NN mean training batch loss: 0.0271226
+NN testing loss: 0.0275669
+NN testing precision: 0.894744
+NN epoch: 19
+NN mean training batch loss: 0.0270631
+NN testing loss: 0.0264955
+NN testing precision: 0.862606
+NN epoch: 20
+NN mean training batch loss: 0.0270537
+NN testing loss: 0.0269345
+NN testing precision: 0.858711
+NN epoch: 21
+NN mean training batch loss: 0.0269522
+NN testing loss: 0.0271064
+NN testing precision: 0.889181
+NN epoch: 22
+NN mean training batch loss: 0.0269525
+NN testing loss: 0.0282105
+NN testing precision: 0.897546
+NN epoch: 23
+NN mean training batch loss: 0.0269502
+NN testing loss: 0.0266577
+NN testing precision: 0.866858
+NN epoch: 24
+NN mean training batch loss: 0.0269323
+NN testing loss: 0.026587
+NN testing precision: 0.877191
+NN epoch: 25
+NN mean training batch loss: 0.0268711
+NN testing loss: 0.0269288
+NN testing precision: 0.889704
+NN epoch: 26
+NN mean training batch loss: 0.0268508
+NN testing loss: 0.027744
+NN testing precision: 0.896771
+NN epoch: 27
+NN mean training batch loss: 0.0268085
+NN testing loss: 0.0266785
+NN testing precision: 0.875149
+NN epoch: 28
+NN mean training batch loss: 0.0267766
+NN testing loss: 0.026914
+NN testing precision: 0.852845
+NN epoch: 29
+NN mean training batch loss: 0.0266614
+NN testing loss: 0.0265151
+NN testing precision: 0.860192
+NN epoch: 30
+NN mean training batch loss: 0.0268386
+NN testing loss: 0.0266207
+NN testing precision: 0.875733
+NN epoch: 31
+NN mean training batch loss: 0.0267562
+NN testing loss: 0.0264764
+NN testing precision: 0.862007
+NN epoch: 32
+NN mean training batch loss: 0.0267716
+NN testing loss: 0.0267031
+NN testing precision: 0.866632
+NN epoch: 33
+NN mean training batch loss: 0.0266941
+NN testing loss: 0.0265537
+NN testing precision: 0.862712
+NN epoch: 34
+NN mean training batch loss: 0.0267491
+NN testing loss: 0.0265539
+NN testing precision: 0.862818
+NN epoch: 35
+NN mean training batch loss: 0.0267971
+NN testing loss: 0.026499
+NN testing precision: 0.866199
+NN epoch: 36
+NN mean training batch loss: 0.0267332
+NN testing loss: 0.0264622
+NN testing precision: 0.876316
+NN epoch: 37
+NN mean training batch loss: 0.0266908
+NN testing loss: 0.027072
+NN testing precision: 0.889656
+NN epoch: 38
+NN mean training batch loss: 0.0270075
+NN testing loss: 0.0264611
+NN testing precision: 0.86373
+NN epoch: 39
+NN mean training batch loss: 0.0266107
+NN testing loss: 0.0271199
+NN testing precision: 0.890046
+NN epoch: 40
+NN mean training batch loss: 0.0267366
+NN testing loss: 0.0265323
+NN testing precision: 0.861179
+NN epoch: 41
+NN mean training batch loss: 0.026724
+NN testing loss: 0.0263628
+NN testing precision: 0.870121
+NN epoch: 42
+NN mean training batch loss: 0.0267253
+NN testing loss: 0.0267696
+NN testing precision: 0.884347
+NN epoch: 43
+NN mean training batch loss: 0.0266736
+NN testing loss: 0.026277
+NN testing precision: 0.867787
+NN epoch: 44
+NN mean training batch loss: 0.0268005
+NN testing loss: 0.0271929
+NN testing precision: 0.851186
+NN epoch: 45
+NN mean training batch loss: 0.0268156
+NN testing loss: 0.0264337
+NN testing precision: 0.864071
+NN epoch: 46
+NN mean training batch loss: 0.0267303
+NN testing loss: 0.026289
+NN testing precision: 0.87865
+NN epoch: 47
+NN mean training batch loss: 0.0267264
+NN testing loss: 0.0265611
+NN testing precision: 0.870947
+NN epoch: 48
+NN mean training batch loss: 0.0267574
+NN testing loss: 0.0263717
+NN testing precision: 0.874586
+NN epoch: 49
+NN mean training batch loss: 0.0266076
+NN testing loss: 0.026635
+NN testing precision: 0.885597
+NN epoch: 50
+NN mean training batch loss: 0.0266985
+NN testing loss: 0.026575
+NN testing precision: 0.861147
+NN Training END elapsed time: 322.909 s
+Trained NN model: MlTemp/DrellYan_NN.pt
+NN training COMPLETE elapsed time: 323.019 s
+Trained NN model: MlTemp/DrellYan_NN.pt
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+Unique certified luminosity blocks: 1471
+Integrated luminosity [fb^-1]: 0.271945
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+
+--- NN EVALUATION DATA ---
+Testing dataframe events: 6181964
+Testing dataframe DY events: 309625
+Testing dataframe DY [%]: 5.00852
+NN evaluation input events: 619973
+NN evaluation valid events: 619973
+NN evaluation skipped non-finite events: 0
+NN evaluation signal: 31057
+NN evaluation background: 588916
+
+--- NN evaluation ---
+Model file: MlTemp/DrellYan_NN.pt
+Evaluation usage [%]: 10
+Evaluation random seed: 1
+Evaluation batch size: 1024
+Evaluation threads: 8
+Evaluated events: 619973
+Model selected events: 33751
+Decision threshold: 0.5
+True positives: 29164
+True negatives: 584329
+False positives: 4587
+False negatives: 1893
+Accuracy: 0.989548
+PRECISION: 0.864093
+Recall: 0.939048
+Background rejection: 0.992211
+F1: 0.900012
+ROC AUC: 0.997379
+Log-loss: 0.026673
+S/sqrt(S+B): 158.746
+NN evaluation COMPLETE elapsed time: 350.66 s
+MlRun complete elapsed time: 350.696 s

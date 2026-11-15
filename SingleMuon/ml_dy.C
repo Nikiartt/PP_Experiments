@@ -2193,7 +2193,12 @@ std::string trainDrellYanNn(
     double datasetUsagePercentage,
     unsigned numberOfThreads,
     double decisionThreshold,
-    double& trainMaxPrecision)
+    double& trainMaxPrecision,
+    bool useEarlyStopping,
+    unsigned earlyStoppingPatience,
+    double earlyStoppingMinDelta,
+    double positiveClassWeight,
+    double negativeClassWeight)
 {
     std::cout << "trainDrellYanNn START\n";
     std::cout << "Features: " << features.size() << "\n";
@@ -2217,6 +2222,13 @@ std::string trainDrellYanNn(
         throw std::runtime_error("NN decision threshold must be in [0, 1]");
     if (!std::isfinite(trainMaxPrecision) || trainMaxPrecision < 0.0 || trainMaxPrecision > 1.0)
         throw std::runtime_error("TrainMaxPrecision must be in [0, 1]");
+    if (useEarlyStopping && earlyStoppingPatience == 0)
+        throw std::runtime_error("NN early-stopping patience must be positive");
+    if (!std::isfinite(earlyStoppingMinDelta) || earlyStoppingMinDelta < 0.0)
+        throw std::runtime_error("NN early-stopping minimum delta must be non-negative");
+    if (!std::isfinite(positiveClassWeight) || positiveClassWeight <= 0.0 ||
+        !std::isfinite(negativeClassWeight) || negativeClassWeight <= 0.0)
+        throw std::runtime_error("NN class weights must be finite and positive");
 
     const ULong64_t keepThreshold = static_cast<ULong64_t>(std::llround(datasetUsagePercentage * 100.0));
     if (keepThreshold == 0) throw std::runtime_error("Dataset usage percentage rounds to zero");
@@ -2264,6 +2276,20 @@ std::string trainDrellYanNn(
     torch::optim::Adam optimizer(
         model->parameters(), torch::optim::AdamOptions(learningRate).weight_decay(weightDecay));
 
+    auto calculateBceLoss = [&](const torch::Tensor& logits, const torch::Tensor& labels) {
+        if (positiveClassWeight == 1.0 && negativeClassWeight == 1.0)
+            return torch::nn::functional::binary_cross_entropy_with_logits(logits, labels);
+
+        auto classWeights = torch::where(
+            labels > 0.5,
+            torch::full_like(labels, positiveClassWeight),
+            torch::full_like(labels, negativeClassWeight));
+
+        return torch::nn::functional::binary_cross_entropy_with_logits(
+            logits, labels,
+            torch::nn::functional::BinaryCrossEntropyWithLogitsFuncOptions().weight(classWeights));
+    };
+
     auto calculateTestingMetrics = [&]() {
         torch::NoGradGuard noGrad;
         model->eval();
@@ -2274,7 +2300,7 @@ std::string trainDrellYanNn(
             const int64_t count = std::min(batchSize, testingEvents - start);
             auto labels = testing.labels.narrow(0, start, count);
             auto logits = model->forward(testing.inputs.narrow(0, start, count));
-            const double value = torch::nn::functional::binary_cross_entropy_with_logits(logits, labels).item<double>();
+            const double value = calculateBceLoss(logits, labels).item<double>();
             if (!std::isfinite(value)) throw std::runtime_error("NN testing loss is non-finite");
 
             auto predicted = torch::ge(torch::sigmoid(logits), decisionThreshold);
@@ -2293,7 +2319,7 @@ std::string trainDrellYanNn(
     
     logElapsedTime("NN Training START");
 
-    TGraph trainingLossGraph(numberOfEpochs), testingLossGraph(numberOfEpochs), precisionGraph(numberOfEpochs);
+    TGraph trainingLossGraph, testingLossGraph, precisionGraph;
 
     std::string layerTag;//Saving of intermediade highes precision models
     for (size_t i = 0; i < hiddenLayers.size(); ++i) {
@@ -2316,7 +2342,12 @@ std::string trainDrellYanNn(
 
         if (!std::ifstream(outputFile, std::ios::binary))
             throw std::runtime_error("NN model was not created: " + outputFile);
+        
     };
+
+    double bestValidationLoss = std::numeric_limits<double>::infinity();
+    unsigned epochsWithoutImprovement = 0;
+    std::vector<torch::Tensor> bestValidationWeights;
 
     for (unsigned epoch = 0; epoch < numberOfEpochs; ++epoch) {
         model->train();
@@ -2331,7 +2362,7 @@ std::string trainDrellYanNn(
 
             optimizer.zero_grad();
             auto logits = model->forward(inputs);
-            auto loss = torch::nn::functional::binary_cross_entropy_with_logits(logits, labels);
+            auto loss = calculateBceLoss(logits, labels);
             const double value = loss.item<double>();
 
             if (!std::isfinite(value)) throw std::runtime_error("NN training loss is non-finite");
@@ -2369,6 +2400,31 @@ std::string trainDrellYanNn(
             logValue("NN TrainMaxPrecision", trainMaxPrecision);
         }
 
+        if (useEarlyStopping) {
+            if (testingLoss < bestValidationLoss - earlyStoppingMinDelta) {
+                bestValidationLoss = testingLoss;
+                epochsWithoutImprovement = 0;
+                bestValidationWeights.clear();
+                for (const auto& parameter : model->parameters())
+                    bestValidationWeights.push_back(parameter.detach().clone());
+            } else {
+                ++epochsWithoutImprovement;
+                logValue("NN epochs without validation-loss improvement", epochsWithoutImprovement);
+                if (epochsWithoutImprovement >= earlyStoppingPatience) {
+                    logValue("NN early stopping", "Triggered at epoch " + std::to_string(epoch + 1));
+                    break;
+                }
+            }
+        }
+
+    }
+
+    if (useEarlyStopping && !bestValidationWeights.empty()) {
+        torch::NoGradGuard noGrad;
+        auto parameters = model->parameters();
+        for (size_t i = 0; i < parameters.size(); ++i)
+            parameters[i].copy_(bestValidationWeights[i]);
+        logValue("NN restored best validation loss", bestValidationLoss);
     }
 
     gSystem->mkdir("Images", true);

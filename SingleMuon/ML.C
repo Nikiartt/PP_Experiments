@@ -1031,6 +1031,7 @@ void MlRun()
 
     // EXPERIMENTS WITH ARCHITECTURE
     // (const double DatasetUsagePercentage = 5.00; const double ValidationUsagePercentage = 20.00; const double EvaluationUsagePercentage = 10.00;)
+    // L2 enabled nnWeightDecay = 0.0001;
     // logNN76 nnHiddenLayers = {64}, nnNumberOfEpochs = 10; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam
     // logNN77 nnHiddenLayers = {256}, nnNumberOfEpochs = 500; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.907247
     // logNN78 nnHiddenLayers = {64, 32}, nnNumberOfEpochs = 100; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.917973
@@ -1039,31 +1040,47 @@ void MlRun()
     // logNN81 nnHiddenLayers = {128, 128, 64}, nnNumberOfEpochs = 50; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision  0.923542
     // logNN82 nnHiddenLayers = {128, 128, 64, 32}, nnNumberOfEpochs = 50; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.907902 (long stoped)
     // logNN83 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam Precision 0.923542
-    // logNN84
-    // logNN85
-    // logNN86
-    // logNN87
-    // logNN88
-    // logNN89
-    // logNN90
+    // logNN84 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 50; nnBatchSize = 1024;, Binary cross-entropy with logits, Optimizer - Adam,  nnWeightDecay = 0.001; Precision +- 0.87 laza
+    // logNN85 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 50; nnWeightDecay = 0; Better results.  precision: 0.918833
+    // logNN86 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 8; nnEarlyStoppingMinDelta = 0.0001; at epoch 37.
+    // logNN87 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 8; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 5.0; nnNegativeClassWeight = 1.0; precision: 0.837754
+    // logNN88 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 10.0; nnNegativeClassWeight = 1.0; precision: 0.797715
+    // logNN89 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 0.5; precision: 0.876257
+    // logNN90 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 2.0; precision: 0.94736
+    // logNN91 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 3.0; precision 0.956700
+    // logNN92 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 5.0; precision 0.963067
+    // logNN93 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 8.0; 0.970814; Epoch 42/50
+    // logNN94 nnHiddenLayers = {128, 64, 32}, nnUseEarlyStopping = true; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 12.0; precision; 0.977811 Epoch 50/50 training
+    // logNN95 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 15.0; precision; 0.980434 Epoch 42/100
+    // logNN96 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 18.0; precision;  0.981811    
+    // logNN97 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 21.0; precision;  0.983223
+    // logNN98 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 25.0; precision;
+    // logNN99
+    // logNN100
 
 
     //NN PARAMETERS
     const std::vector<int64_t> nnHiddenLayers = {128, 64, 32};
-    const unsigned int nnNumberOfEpochs = 50;
+    const unsigned int nnNumberOfEpochs = 100;
     const int64_t nnBatchSize = 1024;
     const double nnLearningRate = 0.0007;
-    const double nnWeightDecay = 0.0001;
+    const double nnWeightDecay = 0;
     const double nnDropoutProbability = 0.00;
     const unsigned int nnRandomSeed = 1;
     const double nnDecisionThreshold = 0.5;
     const std::string nnModelFile = "MlTemp/DrellYan_NN.pt";
-    double TrainMaxPrecision = 0.905;
+    //Saving intermediate models with high precision
+    double TrainMaxPrecision = 0.983;
+    //Early Stoping
+    const bool nnUseEarlyStopping = true;
+    const unsigned int nnEarlyStoppingPatience = 10;
+    const double nnEarlyStoppingMinDelta = 0.0001;
+    //Weighted BCE
+    const double nnPositiveClassWeight = 1.0;
+    const double nnNegativeClassWeight = 21.0;
 
     const bool UseNeuralNetwork = true;
     const bool UseBDT = false;
-    // if (!UseNeuralNetwork && !UseBDT)
-    //     throw std::runtime_error("Enable UseNeuralNetwork, UseBDT, or both");
 
 
     if (UseNeuralNetwork) {
@@ -1078,6 +1095,11 @@ void MlRun()
         logValue("Learning rate", nnLearningRate); logValue("Weight decay", nnWeightDecay);
         logValue("Dropout probability", nnDropoutProbability); logValue("Random seed", nnRandomSeed);
         logValue("Decision threshold", nnDecisionThreshold); logValue("Model file", nnModelFile);
+        logValue("Early stopping", nnUseEarlyStopping);
+        logValue("Early stopping patience", nnEarlyStoppingPatience);
+        logValue("Early stopping minimum validation-loss improvement", nnEarlyStoppingMinDelta);
+        logValue("Positive class weight", nnPositiveClassWeight);
+        logValue("Negative class weight", nnNegativeClassWeight);
         logValue("Evaluation usage [%]", EvaluationUsagePercentage);
     } else {
         logLine("[BDT model parameters]");
@@ -1177,7 +1199,9 @@ void MlRun()
                 features, train, validation, nnModelFile, nnHiddenLayers,
                 nnNumberOfEpochs, nnBatchSize, nnLearningRate, nnWeightDecay,
                 nnDropoutProbability, nnRandomSeed, 100.0, numberOfThreads,
-                nnDecisionThreshold, TrainMaxPrecision);
+                nnDecisionThreshold, TrainMaxPrecision, nnUseEarlyStopping,
+                nnEarlyStoppingPatience, nnEarlyStoppingMinDelta,
+                nnPositiveClassWeight, nnNegativeClassWeight);
             logValue("Trained NN model", nnModel);
         }
         if (UseBDT) {
