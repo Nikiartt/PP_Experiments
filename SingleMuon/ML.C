@@ -938,9 +938,9 @@ void MlRun()
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 5.00;
+    const double DatasetUsagePercentage = 50.00;
     const double ValidationUsagePercentage = 20.00; // Percent of the selected training sample.
-    const double EvaluationUsagePercentage = 10.00;
+    const double EvaluationUsagePercentage = 100.00;
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -1054,9 +1054,22 @@ void MlRun()
     // logNN95 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 15.0; precision; 0.980434 Epoch 42/100
     // logNN96 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 18.0; precision;  0.981811    
     // logNN97 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 21.0; precision;  0.983223
-    // logNN98 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 10; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 25.0; precision;
-    // logNN99
-    // logNN100
+    // logNN98 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 12; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 25.0; precision;  0.985017
+    // logNN99 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 12; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 28.0; precision;  0.986351
+    // logNN100 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 12; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 29.0; precision; 1.0000???
+    // logNN101 nnHiddenLayers = {128, 64, 32} nnPositiveClassWeight = 0.7; nnNegativeClassWeight = 29.0; DatasetUsagePercentage = 50.00; EvaluationUsagePercentage = 100.00; precision: 0.991984!!!!
+    // logNN102
+    // logNN103
+    // logNN104
+    // logNN105
+    // logNN106
+    // logNN107
+    // logNN108
+    // logNN109
+    // logNN110
+    // logNN111
+    // logNN112
+    // logNN113
 
 
     //NN PARAMETERS
@@ -1070,14 +1083,14 @@ void MlRun()
     const double nnDecisionThreshold = 0.5;
     const std::string nnModelFile = "MlTemp/DrellYan_NN.pt";
     //Saving intermediate models with high precision
-    double TrainMaxPrecision = 0.983;
+    double TrainMaxPrecision = 0.985;
     //Early Stoping
     const bool nnUseEarlyStopping = true;
-    const unsigned int nnEarlyStoppingPatience = 10;
+    const unsigned int nnEarlyStoppingPatience = 12;
     const double nnEarlyStoppingMinDelta = 0.0001;
     //Weighted BCE
-    const double nnPositiveClassWeight = 1.0;
-    const double nnNegativeClassWeight = 21.0;
+    const double nnPositiveClassWeight = 0.7;
+    const double nnNegativeClassWeight = 29.0;
 
     const bool UseNeuralNetwork = true;
     const bool UseBDT = false;
@@ -1263,7 +1276,7 @@ void MlRun()
                 evaluation,
                 realFeatures.df,
                 nnModel,
-                // "MlTemp/DrellYan_NN_0889.pt",
+                // "MlTemp/DrellYan_NN_Layers{128.64.32}_Precision0.986994_Epoch25.pt",
                 nnDecisionThreshold,
                 EvaluationUsagePercentage,
                 HistogramUsagePercentage,
