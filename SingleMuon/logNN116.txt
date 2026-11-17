@@ -1,0 +1,371 @@
+Drell-Yan log
+
+[NN model parameters]
+Method: LibTorch dense neural network
+Device: CPU
+Optimizer: Adam
+Loss: BCEWithLogitsLoss
+Activation: ReLU
+Input normalization: Training mean and standard deviation
+Hidden layers: 3
+Hidden layer 1 neurons: 128
+Hidden layer 2 neurons: 64
+Hidden layer 3 neurons: 32
+Epochs: 100
+Batch size: 1024
+Learning rate: 0.0007
+Weight decay: 0
+Dropout probability: 0
+Random seed: 1
+Decision threshold: 0.5
+Model file: MlTemp/DrellYan_NN_Adam_WeightedBCE_Pos1.000000_Neg20.000000.pt
+Early stopping: 1
+Early stopping patience: 12
+Early stopping minimum validation-loss improvement: 0.0001
+Positive class weight: 1
+Negative class weight: 20
+Evaluation usage [%]: 10
+Loss: Weighted BCE
+Positive class weight: 1
+Negative class weight: 20
+
+--- NN TRAINING FEATURES ---
+Number of features: 26
+Feature 1: MuonCount
+Feature 2: HLT_IsoMu24_f
+Feature 3: MET_pt
+Feature 4: HasMuonTrigger
+Feature 5: MinMuonTriggerDeltaR2
+Feature 6: MaxMuonTriggerPt
+Feature 7: Muon0_exists
+Feature 8: Muon0_pt
+Feature 9: Muon0_eta
+Feature 10: Muon0_charge
+Feature 11: Muon0_isGlobal
+Feature 12: Muon0_nStations
+Feature 13: Muon0_nTrackerLayers
+Feature 14: Muon0_dxy
+Feature 15: Muon0_ptErr
+Feature 16: Muon0_tkRelIso
+Feature 17: Muon1_exists
+Feature 18: Muon1_pt
+Feature 19: Muon1_eta
+Feature 20: Muon1_charge
+Feature 21: Muon1_isGlobal
+Feature 22: Muon1_nStations
+Feature 23: Muon1_nTrackerLayers
+Feature 24: Muon1_dxy
+Feature 25: Muon1_ptErr
+Feature 26: Muon1_tkRelIso
+
+--- NN TRAINING DATA ---
+NN data loading START elapsed time: 0.695158 s
+NN training input events: 577694
+NN training valid events: 577694
+NN training skipped non-finite events: 0
+NN training signal: 28858
+NN training background: 548836
+NN testing input events: 145061
+NN testing valid events: 145061
+NN testing skipped non-finite events: 0
+NN testing signal: 7212
+NN testing background: 137849
+NN data loading END elapsed time: 4.99411 s
+NN training baseline accuracy (always background): 0.950046
+NN testing baseline accuracy (always background): 0.950283
+NN optimizer: Adam
+
+--- NN TRAINING HISTORY ---
+NN Training START elapsed time: 5.18315 s
+NN epoch: 1
+NN mean training batch loss: 0.677479
+NN testing loss: 0.120276
+NN testing precision: 0
+NN epoch: 2
+NN mean training batch loss: 0.114518
+NN testing loss: 0.115241
+NN testing precision: 0.964168
+NN epoch: 3
+NN mean training batch loss: 0.110467
+NN testing loss: 0.112023
+NN testing precision: 0.969599
+NN epoch: 4
+NN mean training batch loss: 0.108072
+NN testing loss: 0.107926
+NN testing precision: 0.970009
+NN epoch: 5
+NN mean training batch loss: 0.105309
+NN testing loss: 0.106132
+NN testing precision: 0.966369
+NN epoch: 6
+NN mean training batch loss: 0.102057
+NN testing loss: 0.104208
+NN testing precision: 0.967766
+NN epoch: 7
+NN mean training batch loss: 0.0999733
+NN testing loss: 0.0999031
+NN testing precision: 0.9703
+NN epoch: 8
+NN mean training batch loss: 0.0975648
+NN testing loss: 0.0975589
+NN testing precision: 0.978189
+NN epoch: 9
+NN mean training batch loss: 0.0962054
+NN testing loss: 0.102231
+NN testing precision: 0.963655
+NN epochs without validation-loss improvement: 1
+NN epoch: 10
+NN mean training batch loss: 0.0949848
+NN testing loss: 0.0941825
+NN testing precision: 0.976461
+NN epoch: 11
+NN mean training batch loss: 0.0932239
+NN testing loss: 0.0947987
+NN testing precision: 0.978555
+NN epochs without validation-loss improvement: 1
+NN epoch: 12
+NN mean training batch loss: 0.0930866
+NN testing loss: 0.0935899
+NN testing precision: 0.97355
+NN epoch: 13
+NN mean training batch loss: 0.0923
+NN testing loss: 0.095023
+NN testing precision: 0.9808
+NN epochs without validation-loss improvement: 1
+NN epoch: 14
+NN mean training batch loss: 0.0917924
+NN testing loss: 0.0959788
+NN testing precision: 0.982065
+NN epochs without validation-loss improvement: 2
+NN epoch: 15
+NN mean training batch loss: 0.0908497
+NN testing loss: 0.0914749
+NN testing precision: 0.976363
+NN epoch: 16
+NN mean training batch loss: 0.0907041
+NN testing loss: 0.0979366
+NN testing precision: 0.96469
+NN epochs without validation-loss improvement: 1
+NN epoch: 17
+NN mean training batch loss: 0.090158
+NN testing loss: 0.092002
+NN testing precision: 0.978743
+NN epochs without validation-loss improvement: 2
+NN epoch: 18
+NN mean training batch loss: 0.0896803
+NN testing loss: 0.0931705
+NN testing precision: 0.97076
+NN epochs without validation-loss improvement: 3
+NN epoch: 19
+NN mean training batch loss: 0.0897442
+NN testing loss: 0.0928076
+NN testing precision: 0.97983
+NN epochs without validation-loss improvement: 4
+NN epoch: 20
+NN mean training batch loss: 0.0899147
+NN testing loss: 0.0919093
+NN testing precision: 0.971686
+NN epochs without validation-loss improvement: 5
+NN epoch: 21
+NN mean training batch loss: 0.0885022
+NN testing loss: 0.0901218
+NN testing precision: 0.973671
+NN epoch: 22
+NN mean training batch loss: 0.0883502
+NN testing loss: 0.0917813
+NN testing precision: 0.97508
+NN epochs without validation-loss improvement: 1
+NN epoch: 23
+NN mean training batch loss: 0.0883509
+NN testing loss: 0.0896348
+NN testing precision: 0.975171
+NN epoch: 24
+NN mean training batch loss: 0.0872417
+NN testing loss: 0.0914046
+NN testing precision: 0.978207
+NN epochs without validation-loss improvement: 1
+NN epoch: 25
+NN mean training batch loss: 0.08683
+NN testing loss: 0.0941982
+NN testing precision: 0.982243
+NN epochs without validation-loss improvement: 2
+NN epoch: 26
+NN mean training batch loss: 0.0868252
+NN testing loss: 0.0916737
+NN testing precision: 0.972229
+NN epochs without validation-loss improvement: 3
+NN epoch: 27
+NN mean training batch loss: 0.0869646
+NN testing loss: 0.0951834
+NN testing precision: 0.970042
+NN epochs without validation-loss improvement: 4
+NN epoch: 28
+NN mean training batch loss: 0.0868665
+NN testing loss: 0.0907561
+NN testing precision: 0.971741
+NN epochs without validation-loss improvement: 5
+NN epoch: 29
+NN mean training batch loss: 0.085774
+NN testing loss: 0.093229
+NN testing precision: 0.978863
+NN epochs without validation-loss improvement: 6
+NN epoch: 30
+NN mean training batch loss: 0.086665
+NN testing loss: 0.0892293
+NN testing precision: 0.976202
+NN epoch: 31
+NN mean training batch loss: 0.0856794
+NN testing loss: 0.0885074
+NN testing precision: 0.979173
+NN epoch: 32
+NN mean training batch loss: 0.0844155
+NN testing loss: 0.0885894
+NN testing precision: 0.97898
+NN epochs without validation-loss improvement: 1
+NN epoch: 33
+NN mean training batch loss: 0.0856868
+NN testing loss: 0.0908552
+NN testing precision: 0.975681
+NN epochs without validation-loss improvement: 2
+NN epoch: 34
+NN mean training batch loss: 0.085047
+NN testing loss: 0.0899394
+NN testing precision: 0.977725
+NN epochs without validation-loss improvement: 3
+NN epoch: 35
+NN mean training batch loss: 0.0847756
+NN testing loss: 0.0887111
+NN testing precision: 0.977015
+NN epochs without validation-loss improvement: 4
+NN epoch: 36
+NN mean training batch loss: 0.0843984
+NN testing loss: 0.0890483
+NN testing precision: 0.979759
+NN epochs without validation-loss improvement: 5
+NN epoch: 37
+NN mean training batch loss: 0.0840413
+NN testing loss: 0.0917632
+NN testing precision: 0.982085
+NN epochs without validation-loss improvement: 6
+NN epoch: 38
+NN mean training batch loss: 0.0840218
+NN testing loss: 0.0904823
+NN testing precision: 0.972906
+NN epochs without validation-loss improvement: 7
+NN epoch: 39
+NN mean training batch loss: 0.0827869
+NN testing loss: 0.09331
+NN testing precision: 0.970188
+NN epochs without validation-loss improvement: 8
+NN epoch: 40
+NN mean training batch loss: 0.0829759
+NN testing loss: 0.0881195
+NN testing precision: 0.97675
+NN epoch: 41
+NN mean training batch loss: 0.0831215
+NN testing loss: 0.0901734
+NN testing precision: 0.979671
+NN epochs without validation-loss improvement: 1
+NN epoch: 42
+NN mean training batch loss: 0.0822939
+NN testing loss: 0.0922023
+NN testing precision: 0.972831
+NN epochs without validation-loss improvement: 2
+NN epoch: 43
+NN mean training batch loss: 0.0818191
+NN testing loss: 0.0898607
+NN testing precision: 0.980556
+NN epochs without validation-loss improvement: 3
+NN epoch: 44
+NN mean training batch loss: 0.0824357
+NN testing loss: 0.0929687
+NN testing precision: 0.976672
+NN epochs without validation-loss improvement: 4
+NN epoch: 45
+NN mean training batch loss: 0.0821356
+NN testing loss: 0.0895442
+NN testing precision: 0.977378
+NN epochs without validation-loss improvement: 5
+NN epoch: 46
+NN mean training batch loss: 0.0833992
+NN testing loss: 0.0924135
+NN testing precision: 0.973763
+NN epochs without validation-loss improvement: 6
+NN epoch: 47
+NN mean training batch loss: 0.0821621
+NN testing loss: 0.0899895
+NN testing precision: 0.973998
+NN epochs without validation-loss improvement: 7
+NN epoch: 48
+NN mean training batch loss: 0.081717
+NN testing loss: 0.0902345
+NN testing precision: 0.976159
+NN epochs without validation-loss improvement: 8
+NN epoch: 49
+NN mean training batch loss: 0.0809901
+NN testing loss: 0.0939226
+NN testing precision: 0.981502
+NN epochs without validation-loss improvement: 9
+NN epoch: 50
+NN mean training batch loss: 0.0806309
+NN testing loss: 0.0910231
+NN testing precision: 0.972639
+NN epochs without validation-loss improvement: 10
+NN epoch: 51
+NN mean training batch loss: 0.0811078
+NN testing loss: 0.0902052
+NN testing precision: 0.976689
+NN epochs without validation-loss improvement: 11
+NN epoch: 52
+NN mean training batch loss: 0.0802707
+NN testing loss: 0.0953183
+NN testing precision: 0.967988
+NN epochs without validation-loss improvement: 12
+NN early stopping: Triggered at epoch 52
+NN restored best validation loss: 0.0881195
+NN Training END elapsed time: 106.392 s
+Trained NN model: MlTemp/DrellYan_NN_Adam_WeightedBCE_Pos1.000000_Neg20.000000.pt
+NN training COMPLETE elapsed time: 106.497 s
+Trained NN model: MlTemp/DrellYan_NN_Adam_WeightedBCE_Pos1.000000_Neg20.000000.pt
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+Unique certified luminosity blocks: 1471
+Integrated luminosity [fb^-1]: 0.271945
+Good JSON run count: 423
+First JSON run: 273150
+First JSON run lumi-range count: 1
+
+--- NN EVALUATION DATA ---
+Testing dataframe events: 6181964
+Testing dataframe DY events: 309625
+Testing dataframe DY [%]: 5.00852
+NN evaluation input events: 619973
+NN evaluation valid events: 619973
+NN evaluation skipped non-finite events: 0
+NN evaluation signal: 31057
+NN evaluation background: 588916
+
+--- NN evaluation ---
+Model file: MlTemp/DrellYan_NN_Adam_WeightedBCE_Pos1.000000_Neg20.000000.pt
+Evaluation usage [%]: 10
+Evaluation random seed: 1
+Evaluation batch size: 1024
+Evaluation threads: 8
+Evaluated events: 619973
+Model selected events: 16716
+Decision threshold: 0.5
+True positives: 16359
+True negatives: 588559
+False positives: 357
+False negatives: 14698
+Accuracy: 0.975717
+PRECISION: 0.978643
+Recall: 0.526741
+Background rejection: 0.999394
+F1: 0.684864
+ROC AUC: 0.998364
+Log-loss: 0.0585659
+S/sqrt(S+B): 126.529
+NN evaluation COMPLETE elapsed time: 125.084 s
+MlRun complete elapsed time: 125.112 s

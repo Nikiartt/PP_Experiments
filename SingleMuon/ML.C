@@ -938,9 +938,9 @@ void MlRun()
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 50.00;
+    const double DatasetUsagePercentage = 5.00;
     const double ValidationUsagePercentage = 20.00; // Percent of the selected training sample.
-    const double EvaluationUsagePercentage = 100.00;
+    const double EvaluationUsagePercentage = 10.00;
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -1058,18 +1058,27 @@ void MlRun()
     // logNN99 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 12; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 28.0; precision;  0.986351
     // logNN100 nnHiddenLayers = {128, 64, 32}, nnNumberOfEpochs = 100; nnEarlyStoppingPatience = 12; nnEarlyStoppingMinDelta = 0.0001; nnPositiveClassWeight = 1.0; nnNegativeClassWeight = 29.0; precision; 1.0000???
     // logNN101 nnHiddenLayers = {128, 64, 32} nnPositiveClassWeight = 0.7; nnNegativeClassWeight = 29.0; DatasetUsagePercentage = 50.00; EvaluationUsagePercentage = 100.00; precision: 0.991984!!!!
-    // logNN102
-    // logNN103
-    // logNN104
-    // logNN105
-    // logNN106
-    // logNN107
-    // logNN108
-    // logNN109
-    // logNN110
-    // logNN111
-    // logNN112
-    // logNN113
+
+    //FOCAL LOSSES IMPLEMENTED
+    // logNN102 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseFocalLoss = true; nnFocalAlpha = 0.25; nnFocalGamma = 2.0;  precision: 0.954019
+    // logNN103 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseFocalLoss = true; nnFocalAlpha = 0.25; nnFocalGamma = 5.0;  precision: 0.949572
+    // logNN104 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseFocalLoss = true; nnFocalAlpha = 0.15; nnFocalGamma = 2.0;  precision: 0.966368
+    // logNN105 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseFocalLoss = true; nnFocalAlpha = 0.05; nnFocalGamma = 2.0;  precision: 0.980586
+    // logNN106 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseFocalLoss = true; nnFocalAlpha = 0.01; nnFocalGamma = 2.0;  precision: 1 and a lot of zeroes precision trainings
+    // logNN107 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseWeightedBce = true; useAdamOptim = true; nnAdamBeta1 = 0.9; nnAdamBeta2 = 0.999;  precision: 0.987926
+    // logNN108 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseWeightedBce = true; useAdamWWWOptim = true; nnAdamWBeta1 = 0.9; nnAdamWBeta2 = 0.999;  precision: 0.984615
+    // logNN109 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseWeightedBce = true; useAdamWWWOptim = true; nnAdamWBeta1 = 0.8; nnAdamWBeta2 = 0.999;  precision: 0.982162
+    // logNN110 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseWeightedBce = true; useAdamWWWOptim = true; nnAdamWBeta1 = 0.99; nnAdamWBeta2 = 0.999; precision: 0 or 0.986792
+    // logNN111 nnHiddenLayers = {128, 64, 32} data 5%/10%  nnUseWeightedBce = true; useAdamWWWOptim = true; nnAdamWBeta1 = 0.95; nnAdamWBeta2 = 0.999; precision:  0.980005
+    // logNN112 nnHiddenLayers = {128, 64, 32} data 5%/10%  useSGDOptim = true; nnNegativeClassWeight = 29.0; nnPositiveClassWeight = 1.0; precision: 0
+    // logNN113 nnHiddenLayers = {128, 64, 32} data 5%/10%  useSGDOptim = true; nnNegativeClassWeight = 20.0; nnPositiveClassWeight = 1.0; precision: 0
+    // logNN114 nnHiddenLayers = {128, 64, 32} data 5%/10%  useMomentumOptim = true; nnMomentumSGDMomentum = 0.9;  nnNegativeClassWeight = 29.0; nnPositiveClassWeight = 1.0; precision: 0.967716
+    // logNN115 nnHiddenLayers = {128, 64, 32} data 5%/10%  useRMSpropOptim = true; nnRMSpropAlpha = 0.99; nnRMSpropMomentum = 0.0;  nnNegativeClassWeight = 29.0; nnPositiveClassWeight = 1.0; precision:  0.949991 - 0.987923 (Chaotic)
+    // logNN116 Return back to best stable. General precision: 0.978
+    // logNN117
+    // logNN118
+    // logNN119
+    // logNN120
 
 
     //NN PARAMETERS
@@ -1081,7 +1090,35 @@ void MlRun()
     const double nnDropoutProbability = 0.00;
     const unsigned int nnRandomSeed = 1;
     const double nnDecisionThreshold = 0.5;
-    const std::string nnModelFile = "MlTemp/DrellYan_NN.pt";
+
+    const bool useSGDOptim = false;
+    const bool useMomentumOptim = false;
+    const bool useRMSpropOptim = false;
+    const bool useAdamOptim = true;
+    const bool useAdamWOptim = false;
+
+    const double nnSGDMomentum = 0.0;        // Used by SGD.
+    const double nnMomentumSGDMomentum = 0.9; // Used by Momentum SGD.
+    const double nnRMSpropAlpha = 0.99;
+    const double nnRMSpropMomentum = 0.0;
+    const double nnAdamBeta1 = 0.9;//controls how much historical gradient information is retained
+    const double nnAdamBeta2 = 0.999; //controls the decay rate of historical squared gradients
+    const double nnAdamWBeta1 = 0.90;
+    const double nnAdamWBeta2 = 0.999;
+
+    const int nnSelectedOptimizerCount =
+        static_cast<int>(useSGDOptim) + static_cast<int>(useMomentumOptim) +
+        static_cast<int>(useRMSpropOptim) + static_cast<int>(useAdamOptim) +
+        static_cast<int>(useAdamWOptim);
+    if (nnSelectedOptimizerCount != 1)
+        throw std::runtime_error("Enable exactly one NN optimizer");
+
+    const std::string nnOptimizerName =
+        useSGDOptim ? "SGD" :
+        useMomentumOptim ? "Momentum" :
+        useRMSpropOptim ? "RMSprop" :
+        useAdamOptim ? "Adam" : "AdamW";
+    
     //Saving intermediate models with high precision
     double TrainMaxPrecision = 0.985;
     //Early Stoping
@@ -1089,17 +1126,35 @@ void MlRun()
     const unsigned int nnEarlyStoppingPatience = 12;
     const double nnEarlyStoppingMinDelta = 0.0001;
     //Weighted BCE
-    const double nnPositiveClassWeight = 0.7;
-    const double nnNegativeClassWeight = 29.0;
+    const bool nnUseWeightedBce = true;
+    const double nnPositiveClassWeight = 1.0;
+    const double nnNegativeClassWeight = 20.0;
+    
+    // Focal-loss parameters (used only when nnUseFocalLoss is true).
+    const bool nnUseFocalLoss = false;
+    const double nnFocalAlpha = 0.01;
+    const double nnFocalGamma = 2.0;
+
+
 
     const bool UseNeuralNetwork = true;
     const bool UseBDT = false;
+
+    std::string nnModelFile = "MlTemp/DrellYan_NN_" + nnOptimizerName;
+    if (nnUseFocalLoss) {
+        nnModelFile += "_FocalAlpha" + std::to_string(nnFocalAlpha) +
+                    "_Gamma" + std::to_string(nnFocalGamma);
+    } else if (nnUseWeightedBce) {
+        nnModelFile += "_WeightedBCE_Pos" + std::to_string(nnPositiveClassWeight) +
+                    "_Neg" + std::to_string(nnNegativeClassWeight);
+    }
+    nnModelFile += ".pt";
 
 
     if (UseNeuralNetwork) {
         logLine("[NN model parameters]");
         logValue("Method", "LibTorch dense neural network"); logValue("Device", "CPU");
-        logValue("Optimizer", "Adam"); logValue("Loss", "BCEWithLogitsLoss");
+        logValue("Optimizer", nnOptimizerName); logValue("Loss", "BCEWithLogitsLoss");
         logValue("Activation", "ReLU"); logValue("Input normalization", "Training mean and standard deviation");
         logValue("Hidden layers", nnHiddenLayers.size());
         for (size_t i = 0; i < nnHiddenLayers.size(); ++i)
@@ -1114,6 +1169,15 @@ void MlRun()
         logValue("Positive class weight", nnPositiveClassWeight);
         logValue("Negative class weight", nnNegativeClassWeight);
         logValue("Evaluation usage [%]", EvaluationUsagePercentage);
+        logValue("Loss", nnUseFocalLoss ? "Focal loss" : (nnUseWeightedBce ? "Weighted BCE" : "BCEWithLogitsLoss"));
+        if (nnUseFocalLoss) {
+            logValue("Focal alpha", nnFocalAlpha);
+            logValue("Focal gamma", nnFocalGamma);
+        }
+        if (nnUseWeightedBce) {
+            logValue("Positive class weight", nnPositiveClassWeight);
+            logValue("Negative class weight", nnNegativeClassWeight);
+        }
     } else {
         logLine("[BDT model parameters]");
         logValue("Method", "BDTG"); logValue("Boost type", "Gradient"); logValue("Number of trees", numberOfTrees);
@@ -1211,10 +1275,14 @@ void MlRun()
             nnModel = trainDrellYanNn(
                 features, train, validation, nnModelFile, nnHiddenLayers,
                 nnNumberOfEpochs, nnBatchSize, nnLearningRate, nnWeightDecay,
+                useSGDOptim, useMomentumOptim, useRMSpropOptim, useAdamOptim, useAdamWOptim,
+                nnSGDMomentum, nnMomentumSGDMomentum, nnRMSpropAlpha, nnRMSpropMomentum,
+                nnAdamBeta1, nnAdamBeta2, nnAdamWBeta1, nnAdamWBeta2,
                 nnDropoutProbability, nnRandomSeed, 100.0, numberOfThreads,
                 nnDecisionThreshold, TrainMaxPrecision, nnUseEarlyStopping,
                 nnEarlyStoppingPatience, nnEarlyStoppingMinDelta,
-                nnPositiveClassWeight, nnNegativeClassWeight);
+                nnUseWeightedBce, nnPositiveClassWeight, nnNegativeClassWeight,
+                nnUseFocalLoss, nnFocalAlpha, nnFocalGamma);
             logValue("Trained NN model", nnModel);
         }
         if (UseBDT) {

@@ -45,19 +45,9 @@
 #include <torch/nn/modules/dropout.h>              // Dropout
 #include <torch/nn/functional/loss.h>              // Binary cross-entropy with logits
 #include <torch/optim/adam.h>                      // Adam optimizer
-// #include <ATen/Parallel.h>
-// #include <ROOT/RDFHelpers.hxx>
-// #include <TROOT.h>
-// #include <THStack.h>
-// #include <TPad.h>
-// #include <TLine.h>
-// #include <TColor.h>
-// #include <TGraphErrors.h>
-// #include <functional>
-// #include <tuple>
-// #include <cstdint>
-// #include <cctype>
-// #include <torch/serialize.h>
+#include <torch/optim/sgd.h>
+#include <torch/optim/rmsprop.h>
+#include <torch/optim/adamw.h>
 #include <torch/serialize/archive.h>
 
 // Functions implemented in ML.C, after #include "ml_dy.C".
@@ -2188,6 +2178,19 @@ std::string trainDrellYanNn(
     int64_t batchSize,
     double learningRate,
     double weightDecay,
+    bool useSGDOptim,
+    bool useMomentumOptim,
+    bool useRMSpropOptim,
+    bool useAdamOptim,
+    bool useAdamWOptim,
+    double sgdMomentum,
+    double momentumSGDMomentum,
+    double rmspropAlpha,
+    double rmspropMomentum,
+    double adamBeta1,
+    double adamBeta2,
+    double adamWBeta1,
+    double adamWBeta2,
     double dropoutProbability,
     unsigned randomSeed,
     double datasetUsagePercentage,
@@ -2197,8 +2200,12 @@ std::string trainDrellYanNn(
     bool useEarlyStopping,
     unsigned earlyStoppingPatience,
     double earlyStoppingMinDelta,
+    bool useWeightedBce,
     double positiveClassWeight,
-    double negativeClassWeight)
+    double negativeClassWeight,
+    bool useFocalLoss,
+    double focalAlpha,
+    double focalGamma)
 {
     std::cout << "trainDrellYanNn START\n";
     std::cout << "Features: " << features.size() << "\n";
@@ -2229,6 +2236,28 @@ std::string trainDrellYanNn(
     if (!std::isfinite(positiveClassWeight) || positiveClassWeight <= 0.0 ||
         !std::isfinite(negativeClassWeight) || negativeClassWeight <= 0.0)
         throw std::runtime_error("NN class weights must be finite and positive");
+    if (useWeightedBce && useFocalLoss)
+        throw std::runtime_error("Enable either weighted BCE or focal loss, not both");
+    if (focalAlpha < 0.0 || focalAlpha > 1.0 || focalGamma < 0.0)
+        throw std::runtime_error("Focal alpha must be in [0, 1] and focal gamma must be non-negative");
+    const int selectedOptimizerCount =
+        static_cast<int>(useSGDOptim) + static_cast<int>(useMomentumOptim) +
+        static_cast<int>(useRMSpropOptim) + static_cast<int>(useAdamOptim) +
+        static_cast<int>(useAdamWOptim);
+    if (selectedOptimizerCount != 1)
+        throw std::runtime_error("Enable exactly one NN optimizer");
+
+    auto validBeta = [](double value) {
+        return std::isfinite(value) && value >= 0.0 && value < 1.0;
+    };
+    if (!std::isfinite(sgdMomentum) || sgdMomentum < 0.0 || sgdMomentum >= 1.0 ||
+        !std::isfinite(momentumSGDMomentum) || momentumSGDMomentum < 0.0 ||
+        momentumSGDMomentum >= 1.0 ||
+        !std::isfinite(rmspropAlpha) || rmspropAlpha < 0.0 || rmspropAlpha >= 1.0 ||
+        !std::isfinite(rmspropMomentum) || rmspropMomentum < 0.0 ||
+        !validBeta(adamBeta1) || !validBeta(adamBeta2) ||
+        !validBeta(adamWBeta1) || !validBeta(adamWBeta2))
+        throw std::runtime_error("Invalid NN optimizer parameter");
 
     const ULong64_t keepThreshold = static_cast<ULong64_t>(std::llround(datasetUsagePercentage * 100.0));
     if (keepThreshold == 0) throw std::runtime_error("Dataset usage percentage rounds to zero");
@@ -2273,18 +2302,61 @@ std::string trainDrellYanNn(
         }
     }
 
-    torch::optim::Adam optimizer(
-        model->parameters(), torch::optim::AdamOptions(learningRate).weight_decay(weightDecay));
+    const std::string optimizerName =
+        useSGDOptim ? "SGD" :
+        useMomentumOptim ? "Momentum" :
+        useRMSpropOptim ? "RMSprop" :
+        useAdamOptim ? "Adam" : "AdamW";
 
-    auto calculateBceLoss = [&](const torch::Tensor& logits, const torch::Tensor& labels) {
-        if (positiveClassWeight == 1.0 && negativeClassWeight == 1.0)
+    std::unique_ptr<torch::optim::Optimizer> optimizer;
+    if (useSGDOptim) {
+        optimizer = std::make_unique<torch::optim::SGD>(
+            model->parameters(),
+            torch::optim::SGDOptions(learningRate)
+                .momentum(sgdMomentum).weight_decay(weightDecay));
+    } else if (useMomentumOptim) {
+        optimizer = std::make_unique<torch::optim::SGD>(
+            model->parameters(),
+            torch::optim::SGDOptions(learningRate)
+                .momentum(momentumSGDMomentum).weight_decay(weightDecay));
+    } else if (useRMSpropOptim) {
+        optimizer = std::make_unique<torch::optim::RMSprop>(
+            model->parameters(),
+            torch::optim::RMSpropOptions(learningRate).alpha(rmspropAlpha)
+                .momentum(rmspropMomentum).weight_decay(weightDecay));
+    } else if (useAdamOptim) {
+        optimizer = std::make_unique<torch::optim::Adam>(
+            model->parameters(),
+            torch::optim::AdamOptions(learningRate)
+                .betas(std::make_tuple(adamBeta1, adamBeta2)).weight_decay(weightDecay));
+    } else {
+        optimizer = std::make_unique<torch::optim::AdamW>(
+            model->parameters(),
+            torch::optim::AdamWOptions(learningRate)
+                .betas(std::make_tuple(adamWBeta1, adamWBeta2)).weight_decay(weightDecay));
+    }
+    logValue("NN optimizer", optimizerName);
+
+    auto calculateLoss = [&](const torch::Tensor& logits, const torch::Tensor& labels) {
+        if (useFocalLoss) {
+            auto bce = torch::nn::functional::binary_cross_entropy_with_logits(
+                logits, labels,
+                torch::nn::functional::BinaryCrossEntropyWithLogitsFuncOptions()
+                    .reduction(torch::kNone));
+            auto probabilities = torch::sigmoid(logits);
+            auto pT = labels * probabilities + (1.0 - labels) * (1.0 - probabilities);
+            auto alphaT = labels * focalAlpha + (1.0 - labels) * (1.0 - focalAlpha);
+            return (alphaT * torch::pow(1.0 - pT, focalGamma) * bce).mean();
+        }
+
+        if (!useWeightedBce ||
+            (positiveClassWeight == 1.0 && negativeClassWeight == 1.0))
             return torch::nn::functional::binary_cross_entropy_with_logits(logits, labels);
 
         auto classWeights = torch::where(
             labels > 0.5,
             torch::full_like(labels, positiveClassWeight),
             torch::full_like(labels, negativeClassWeight));
-
         return torch::nn::functional::binary_cross_entropy_with_logits(
             logits, labels,
             torch::nn::functional::BinaryCrossEntropyWithLogitsFuncOptions().weight(classWeights));
@@ -2300,7 +2372,7 @@ std::string trainDrellYanNn(
             const int64_t count = std::min(batchSize, testingEvents - start);
             auto labels = testing.labels.narrow(0, start, count);
             auto logits = model->forward(testing.inputs.narrow(0, start, count));
-            const double value = calculateBceLoss(logits, labels).item<double>();
+            const double value = calculateLoss(logits, labels).item<double>();
             if (!std::isfinite(value)) throw std::runtime_error("NN testing loss is non-finite");
 
             auto predicted = torch::ge(torch::sigmoid(logits), decisionThreshold);
@@ -2321,7 +2393,17 @@ std::string trainDrellYanNn(
 
     TGraph trainingLossGraph, testingLossGraph, precisionGraph;
 
-    std::string layerTag;//Saving of intermediade highes precision models
+    std::string layerTag;
+    std::string lossTag;
+
+    if (useFocalLoss) {
+        lossTag = "_FocalAlpha" + std::to_string(focalAlpha) +
+                "_Gamma" + std::to_string(focalGamma);
+    } else if (useWeightedBce) {
+        lossTag = "_WeightedBCE_Pos" + std::to_string(positiveClassWeight) +
+                "_Neg" + std::to_string(negativeClassWeight);
+    }
+
     for (size_t i = 0; i < hiddenLayers.size(); ++i) {
         if (i > 0) layerTag += ".";
         layerTag += std::to_string(hiddenLayers[i]);
@@ -2360,14 +2442,14 @@ std::string trainDrellYanNn(
             auto inputs = training.inputs.index_select(0, indices);
             auto labels = training.labels.index_select(0, indices);
 
-            optimizer.zero_grad();
+            optimizer->zero_grad();
             auto logits = model->forward(inputs);
-            auto loss = calculateBceLoss(logits, labels);
+            auto loss = calculateLoss(logits, labels);
             const double value = loss.item<double>();
 
             if (!std::isfinite(value)) throw std::runtime_error("NN training loss is non-finite");
             loss.backward();
-            optimizer.step();
+            optimizer->step();
 
             totalLoss += value * count;
             start += count;
@@ -2391,9 +2473,9 @@ std::string trainDrellYanNn(
             trainMaxPrecision = precision;
 
             const std::string checkpointFile =
-                "MlTemp/DrellYan_NN_Layers{" + layerTag + "}_Precision" +
-                std::to_string(trainMaxPrecision) + "_Epoch" +
-                std::to_string(epoch + 1) + ".pt";
+                "MlTemp/DrellYan_NN_Optimizer" + optimizerName + "_Layers{" + layerTag +
+                "}_Precision" + std::to_string(trainMaxPrecision) + "_Epoch" +
+                std::to_string(epoch + 1) + lossTag + ".pt";
 
             saveModelCheckpoint(checkpointFile);
             logValue("NN record-high precision checkpoint", checkpointFile);
