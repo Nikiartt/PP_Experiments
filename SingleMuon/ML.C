@@ -938,9 +938,9 @@ void MlRun()
     // const bool UsePreparedData = true; // false = create training/testing ROOT files, true = load them
     const double trainingFraction = 0.70;
     const std::string DyMainFilesPath = "dy_mc_main_xrootd_files.txt";// DY MONTE CARLO https://opendata.cern.ch/record/35671 
-    const double DatasetUsagePercentage = 5.00;
+    const double DatasetUsagePercentage = 50.00;
     const double ValidationUsagePercentage = 20.00; // Percent of the selected training sample.
-    const double EvaluationUsagePercentage = 10.00;
+    const double EvaluationUsagePercentage = 100.00;
     const double HistogramUsagePercentage = 100.00;
     const double FalseHistogramUsagePercentage = 100.00;//Percentage of evaluated non-DY predictions used for model_false histograms.
 
@@ -1138,7 +1138,7 @@ void MlRun()
 
 
     const bool UseNeuralNetwork = true;
-    const bool UseBDT = false;
+    const bool UseBDT = true;
 
     std::string nnModelFile = "MlTemp/DrellYan_NN_" + nnOptimizerName;
     if (nnUseFocalLoss) {
@@ -1271,30 +1271,30 @@ void MlRun()
                 throw std::runtime_error(std::string("Prepared MC files lack ") + column);
 
         std::string nnModel, bdtModel;
-        if (UseNeuralNetwork) {
-            nnModel = trainDrellYanNn(
-                features, train, validation, nnModelFile, nnHiddenLayers,
-                nnNumberOfEpochs, nnBatchSize, nnLearningRate, nnWeightDecay,
-                useSGDOptim, useMomentumOptim, useRMSpropOptim, useAdamOptim, useAdamWOptim,
-                nnSGDMomentum, nnMomentumSGDMomentum, nnRMSpropAlpha, nnRMSpropMomentum,
-                nnAdamBeta1, nnAdamBeta2, nnAdamWBeta1, nnAdamWBeta2,
-                nnDropoutProbability, nnRandomSeed, 100.0, numberOfThreads,
-                nnDecisionThreshold, TrainMaxPrecision, nnUseEarlyStopping,
-                nnEarlyStoppingPatience, nnEarlyStoppingMinDelta,
-                nnUseWeightedBce, nnPositiveClassWeight, nnNegativeClassWeight,
-                nnUseFocalLoss, nnFocalAlpha, nnFocalGamma);
-            logValue("Trained NN model", nnModel);
-        }
-        if (UseBDT) {
-            bdtModel = trainDrellYanBdt(
-                features, train, validation,
-                "MlTemp/TMVA_DY_training.root", "MlTemp/BDT_training_history.root",
-                "DrellYanClassification.weights.xml", "BDTG", "DY_BDT_dataset",
-                numberOfTrees, maximumDepth, minimumNodeSizePercent,
-                baggedSampleFraction, numberOfCuts, shrinkage, randomSeed,
-                100.0, numberOfThreads);
-            logValue("Trained BDT model", bdtModel);
-        }
+        // if (UseNeuralNetwork) {
+        //     nnModel = trainDrellYanNn(
+        //         features, train, validation, nnModelFile, nnHiddenLayers,
+        //         nnNumberOfEpochs, nnBatchSize, nnLearningRate, nnWeightDecay,
+        //         useSGDOptim, useMomentumOptim, useRMSpropOptim, useAdamOptim, useAdamWOptim,
+        //         nnSGDMomentum, nnMomentumSGDMomentum, nnRMSpropAlpha, nnRMSpropMomentum,
+        //         nnAdamBeta1, nnAdamBeta2, nnAdamWBeta1, nnAdamWBeta2,
+        //         nnDropoutProbability, nnRandomSeed, 100.0, numberOfThreads,
+        //         nnDecisionThreshold, TrainMaxPrecision, nnUseEarlyStopping,
+        //         nnEarlyStoppingPatience, nnEarlyStoppingMinDelta,
+        //         nnUseWeightedBce, nnPositiveClassWeight, nnNegativeClassWeight,
+        //         nnUseFocalLoss, nnFocalAlpha, nnFocalGamma);
+        //     logValue("Trained NN model", nnModel);
+        // }
+        // if (UseBDT) {
+        //     bdtModel = trainDrellYanBdt(
+        //         features, train, validation,
+        //         "MlTemp/TMVA_DY_training.root", "MlTemp/BDT_training_history.root",
+        //         "DrellYanClassification.weights.xml", "BDTG", "DY_BDT_dataset",
+        //         numberOfTrees, maximumDepth, minimumNodeSizePercent,
+        //         baggedSampleFraction, numberOfCuts, shrinkage, randomSeed,
+        //         100.0, numberOfThreads);
+        //     logValue("Trained BDT model", bdtModel);
+        // }
 
 
         // Shared remote real-data loading and feature preparation for both models.
@@ -1343,8 +1343,8 @@ void MlRun()
                 features,
                 evaluation,
                 realFeatures.df,
-                nnModel,
-                // "MlTemp/DrellYan_NN_Layers{128.64.32}_Precision0.986994_Epoch25.pt",
+                // nnModel,
+                "MlTemp/DrellYan_NN_Layers{128.64.32}_Precision0.991984_Epoch47_BEST2026_11_17.pt",
                 nnDecisionThreshold,
                 EvaluationUsagePercentage,
                 HistogramUsagePercentage,
@@ -1360,8 +1360,8 @@ void MlRun()
                 features,
                 evaluation,
                 realFeatures.df,
-                bdtModel,
-                // "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
+                // bdtModel,
+                "MlTemp/DY_BDT_dataset/weights/DrellYanClassification.weights.xml_BDTG.weights.xml",
                 "BDTG",
                 decisionThreshold,
                 EvaluationUsagePercentage,

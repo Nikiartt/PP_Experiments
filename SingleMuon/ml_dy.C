@@ -2736,23 +2736,23 @@ PredictionResult evaluateDrellYanNn(
     // CreateBdtPositiveSourceHistograms(evaluationDf, selectedIndices, backgroundFilesPaths);
     // CreateBdtRejectedSourceHistograms(evaluationDf, rejectedIndices, backgroundFilesPaths);
     // CreateEvaluationDataHistograms(testingDf);
-    // auto filteredRealEvaluationDf = realEvaluationDf.Filter(useEvaluationEvent, {"Index"});
-    // auto realDataPrediction = RunRealDataDrellYanNnPrediction(features, filteredRealEvaluationDf, model, decisionThreshold, batchSize);
+    auto filteredRealEvaluationDf = realEvaluationDf.Filter(useEvaluationEvent, {"Index"});
+    auto realDataPrediction = RunRealDataDrellYanNnPrediction(features, filteredRealEvaluationDf, model, decisionThreshold, batchSize);
 
-    // CreateBdtRealDataMcComparisonHistograms(
-    //     evaluationDf, filteredRealEvaluationDf, selectedIndices,
-    //     rejectedIndices, realDataPrediction, mcScales,
-    //     backgroundFilesPaths, "nn");
+    CreateBdtRealDataMcComparisonHistograms(
+        evaluationDf, filteredRealEvaluationDf, selectedIndices,
+        rejectedIndices, realDataPrediction, mcScales,
+        backgroundFilesPaths, "nn");
 
-    // const size_t realSelected = static_cast<size_t>(std::count_if(
-    //     realDataPrediction.begin(), realDataPrediction.end(),
-    //     [](const RealDataBdtPrediction& event) { return event.predictedDy; }));
-    // logLine("\n--- REAL-DATA NN PREDICTION ---");
-    // logValue("Real-data events predicted", realDataPrediction.size());
-    // logValue("Real-data predicted DY", realSelected);
-    // logValue("Real-data predicted non-DY", realDataPrediction.size() - realSelected);
+    const size_t realSelected = static_cast<size_t>(std::count_if(
+        realDataPrediction.begin(), realDataPrediction.end(),
+        [](const RealDataBdtPrediction& event) { return event.predictedDy; }));
+    logLine("\n--- REAL-DATA NN PREDICTION ---");
+    logValue("Real-data events predicted", realDataPrediction.size());
+    logValue("Real-data predicted DY", realSelected);
+    logValue("Real-data predicted non-DY", realDataPrediction.size() - realSelected);
 
-    // CreateEvaluationPropertyPlots(histogramDf, selectedIndices, rejectedIndices, backgroundFilesPaths, "nn");
+    CreateEvaluationPropertyPlots(histogramDf, selectedIndices, rejectedIndices, backgroundFilesPaths, "nn");
     
     
     logElapsedTime("NN evaluation COMPLETE");
